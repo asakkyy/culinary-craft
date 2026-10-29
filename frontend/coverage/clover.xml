@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1793316122890" clover="3.2.0">
+  <project timestamp="1793316122890" name="All files">
+    <metrics statements="3" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="1" elements="6" coveredelements="3" complexity="0" loc="3" ncloc="3" packages="2" files="5" classes="5"/>
+    <package name="src">
+      <metrics statements="3" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="1"/>
+      <file name="App.css" path="D:\uni\7semak\kpo\coursework\culinary-craft\frontend\src\App.css">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+      <file name="App.jsx" path="D:\uni\7semak\kpo\coursework\culinary-craft\frontend\src\App.jsx">
+        <metrics statements="3" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="1"/>
+        <line num="8" count="1" type="stmt"/>
+        <line num="10" count="1" type="stmt"/>
+        <line num="24" count="0" type="stmt"/>
+      </file>
+    </package>
+    <package name="src.assets">
+      <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      <file name="hero.png" path="D:\uni\7semak\kpo\coursework\culinary-craft\frontend\src\assets\hero.png">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+      <file name="react.svg" path="D:\uni\7semak\kpo\coursework\culinary-craft\frontend\src\assets\react.svg">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+      <file name="vite.svg" path="D:\uni\7semak\kpo\coursework\culinary-craft\frontend\src\assets\vite.svg">
+        <metrics statements="0" coveredstatements="0" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
+      </file>
+    </package>
+  </project>
+</coverage>
