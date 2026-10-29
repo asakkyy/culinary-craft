@@ -1,0 +1,7 @@
+echo " Running Frontend Checks..."
+cd frontend
+npm run lint && npm run test
+
+echo " Running Backend Checks..."
+cd ../backend
+./gradlew checkstyleMain test
