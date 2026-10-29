@@ -3,13 +3,24 @@ plugins {
 	id 'org.springframework.boot' version '4.1.2'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'checkstyle'
+	id 'jacoco'
 }
+
+
 
 checkstyle {
     toolVersion = '10.12.4'
     configFile = file('config/checkstyle/checkstyle.xml')
 }
 
+jacocoTestReport {
+	dependsOn test // Отчет генерируется только после запуска тестов
+	reports {
+		xml.required = false
+		csv.required = false
+		html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+	}
+}
 
 group = 'com.culinarycraft'
 version = '0.0.1-SNAPSHOT'
