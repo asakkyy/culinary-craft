@@ -1,0 +1,17 @@
+# Java / Gradle
+backend/build/
+backend/.gradle/
+*.class
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
