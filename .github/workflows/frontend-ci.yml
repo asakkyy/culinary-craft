@@ -5,6 +5,12 @@ on:
   pull_request:
     branches: [main, dev]
 
+# ВЫДАЕМ ПРАВА НА КОММЕНТАРИИ
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   frontend-ci:
     runs-on: ubuntu-latest
@@ -21,7 +27,7 @@ jobs:
           
       - run: npm ci
       
-      - name: Lint (Static Analysis)
+      - name: Lint
         run: npm run lint:ci
         
       - name: Format check
@@ -30,36 +36,24 @@ jobs:
       - name: Run tests with coverage
         run: npm run test -- --coverage
         
-      # Отображение покрытия прямо в Pull Request
-      - name: Report Coverage
-        uses: getsentry/coverage-action@0.3.8
+      # НОВЫЙ ЭКШЕН ДЛЯ ВЫВОДА ПОКРЫТИЯ В PR
+      - name: Add Frontend Coverage Comment
+        uses: romeovs/lcov-reporter-action@v0.4.0
         if: always()
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: ./coverage/lcov.info
-          coverage-format: lcov
+          lcov-file: ./frontend/coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          delete-old-comments: true
           
       - name: Build
         run: npm run build
 
-      # Выгрузка всех отчетов в артефакты
-      - name: Upload ESLint report
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: frontend-eslint-report
-          path: frontend/eslint-report.json
-          
-      - name: Upload Vitest results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: frontend-vitest-results
-          path: frontend/test-results.xml
-          
-      - name: Upload Frontend Coverage HTML
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: frontend-coverage-html
-          path: frontend/coverage/
+          name: frontend-reports
+          path: |
+            frontend/eslint-report.json
+            frontend/test-results.xml
+            frontend/coverage/

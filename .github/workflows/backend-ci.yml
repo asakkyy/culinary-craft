@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+# ВЫДАЕМ ПРАВА НА КОММЕНТАРИИ
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   backend-ci:
     runs-on: ubuntu-latest
@@ -23,42 +28,33 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
         
-      - name: Run Checkstyle (Static Analysis)
+      - name: Run Checkstyle
         run: ./gradlew checkstyleMain checkstyleTest
         
       - name: Run tests and generate JaCoCo report
         run: ./gradlew test jacocoTestReport
         
-      # Отображение покрытия прямо в Pull Request
-      - name: Report Coverage
-        uses: getsentry/coverage-action@0.3.8
+      # НОВЫЙ ЭКШЕН ДЛЯ ВЫВОДА ПОКРЫТИЯ В PR
+      - name: Add JaCoCo Coverage Comment
+        uses: madrapps/jacoco-report@v1.6.1
         if: always()
         with:
+          paths: ${{ github.workspace }}/backend/build/reports/jacoco/test/jacocoTestReport.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: build/reports/jacoco/test/jacocoTestReport.xml
-          coverage-format: jacoco
+          min-coverage-overall: 0
+          min-coverage-changed-files: 0
+          title: 'Backend Coverage Report'
+          update-comment: true
           
       - name: Build JAR
         run: ./gradlew build -x test
 
-      # Выгрузка всех отчетов в артефакты
-      - name: Upload Checkstyle report
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backend-checkstyle-report
-          path: backend/build/reports/checkstyle/
-          
-      - name: Upload JUnit test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: backend-junit-results
-          path: backend/build/test-results/test/
-          
-      - name: Upload JaCoCo HTML report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: backend-jacoco-html
-          path: backend/build/reports/jacoco/test/html/
+          name: backend-reports
+          path: |
+            backend/build/reports/checkstyle/
+            backend/build/test-results/test/
+            backend/build/reports/jacoco/test/html/
