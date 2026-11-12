@@ -3,7 +3,11 @@ name: Auto Tag
 on:
   push:
     branches:
-      - main # <--- Только для ветки main
+      - main
+
+# ВЫДАЕМ ПРАВА НА ЗАПИСЬ, ЧТОБЫ МОЖНО БЫЛО ПУШИТЬ ТЕГИ
+permissions:
+  contents: write
 
 jobs:
   tag:
@@ -11,11 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Нужно для получения истории тегов
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }} # <-- Явно указываем токен
           
       - name: Bump version and push tag
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch # Создает версию типа 1.0.1
+          default_bump: patch
           release_branches: main
