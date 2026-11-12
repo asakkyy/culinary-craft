@@ -18,12 +18,48 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
+          
       - run: npm ci
-      - name: Lint
-        run: npm run lint
+      
+      - name: Lint (Static Analysis)
+        run: npm run lint:ci
+        
       - name: Format check
         run: npm run format:check
-      - name: Run tests
-        run: npm run test
+        
+      - name: Run tests with coverage
+        run: npm run test -- --coverage
+        
+      # Отображение покрытия прямо в Pull Request
+      - name: Report Coverage
+        uses: getsentry/coverage-action@0.3.8
+        if: always()
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: ./coverage/lcov.info
+          coverage-format: lcov
+          
       - name: Build
         run: npm run build
+
+      # Выгрузка всех отчетов в артефакты
+      - name: Upload ESLint report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-eslint-report
+          path: frontend/eslint-report.json
+          
+      - name: Upload Vitest results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-vitest-results
+          path: frontend/test-results.xml
+          
+      - name: Upload Frontend Coverage HTML
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage-html
+          path: frontend/coverage/

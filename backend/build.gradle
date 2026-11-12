@@ -14,9 +14,9 @@ checkstyle {
 }
 
 jacocoTestReport {
-	dependsOn test // Отчет генерируется только после запуска тестов
+	dependsOn test
 	reports {
-		xml.required = false
+		xml.required = true // <--- Обязательно true
 		csv.required = false
 		html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
 	}
