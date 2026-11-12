@@ -37,12 +37,12 @@ jobs:
         
       # --- ИСПРАВЛЕННЫЙ ШАГ ДЛЯ КОММЕНТАРИЯ ПОКРЫТИЯ ---
       - name: Report Coverage
-        if: github.event_name == 'pull_request' # Запускаем только для PR
+        if: github.event_name == 'pull_request'
         uses: Nef10/lcov-reporter-action@v0.4.0
         with:
-          lcov-file: ./frontend/coverage/lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          delete-old-comments: true
+          pr-number: ${{ github.event.pull_request.number }}
+          lcov-file: ./frontend/coverage/lcov.info
       # ---------------------------------------------------
           
       - name: Build
