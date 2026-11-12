@@ -1,0 +1,21 @@
+name: Auto Tag
+
+on:
+  push:
+    branches:
+      - main # <--- Только для ветки main
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Нужно для получения истории тегов
+          
+      - name: Bump version and push tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch # Создает версию типа 1.0.1
+          release_branches: main

@@ -5,6 +5,11 @@ on:
   pull_request:
     branches: [main, dev]
 
+# ВЫДАЕМ ПРАВА НА КОММЕНТАРИИ
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   backend-ci:
     runs-on: ubuntu-latest
@@ -19,11 +24,37 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
+          
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+        
       - name: Run Checkstyle
         run: ./gradlew checkstyleMain checkstyleTest
-      - name: Run tests
-        run: ./gradlew test
+        
+      - name: Run tests and generate JaCoCo report
+        run: ./gradlew test jacocoTestReport
+        
+      # НОВЫЙ ЭКШЕН ДЛЯ ВЫВОДА ПОКРЫТИЯ В PR
+      - name: Add JaCoCo Coverage Comment
+        uses: madrapps/jacoco-report@v1.6.1
+        if: always()
+        with:
+          paths: ${{ github.workspace }}/backend/build/reports/jacoco/test/jacocoTestReport.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 0
+          min-coverage-changed-files: 0
+          title: 'Backend Coverage Report'
+          update-comment: true
+          
       - name: Build JAR
         run: ./gradlew build -x test
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-reports
+          path: |
+            backend/build/reports/checkstyle/
+            backend/build/test-results/test/
+            backend/build/reports/jacoco/test/html/
