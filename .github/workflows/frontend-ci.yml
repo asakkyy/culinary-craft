@@ -5,7 +5,6 @@ on:
   pull_request:
     branches: [main, dev]
 
-# ВЫДАЕМ ПРАВА НА КОММЕНТАРИИ
 permissions:
   contents: read
   pull-requests: write
@@ -36,14 +35,15 @@ jobs:
       - name: Run tests with coverage
         run: npm run test -- --coverage
         
-      # НОВЫЙ ЭКШЕН ДЛЯ ВЫВОДА ПОКРЫТИЯ В PR
-      - name: Add Frontend Coverage Comment
-        uses: romeovs/lcov-reporter-action@v0.4.0
-        if: always()
+      # --- ИСПРАВЛЕННЫЙ ШАГ ДЛЯ КОММЕНТАРИЯ ПОКРЫТИЯ ---
+      - name: Report Coverage
+        if: github.event_name == 'pull_request' # Запускаем только для PR
+        uses: Nef10/lcov-reporter-action@v0.4.0
         with:
           lcov-file: ./frontend/coverage/lcov.info
           github-token: ${{ secrets.GITHUB_TOKEN }}
           delete-old-comments: true
+      # ---------------------------------------------------
           
       - name: Build
         run: npm run build
