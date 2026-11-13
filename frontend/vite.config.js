@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
@@ -7,12 +7,15 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/setupTests.js',
-    // Настройки для отчетов
     reporters: ['default', 'junit'],
-    outputFile: './test-results.xml',
+    outputFile: { junit: './reports/frontend/tests/junit.xml' },
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/**/*.test.{js,jsx}', 'src/main.jsx', 'src/setupTests.js'],
+      reportsDirectory: './reports/frontend/coverage',
+      reporter: ['text', 'text-summary', 'json', 'json-summary', 'html', 'lcov'],
+      thresholds: { lines: 60, functions: 60, statements: 60 },
     },
   },
-})
+});

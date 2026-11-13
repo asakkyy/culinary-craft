@@ -22,3 +22,10 @@ frontend/test-results.xml
 frontend/eslint-report.json
 frontend/coverage/
 backend/build/test-results/
+# Generated CI reports (download from Actions, do not commit)
+reports/
+frontend/reports/
+backend/reports/
+__pycache__/
+*.pyc
+backend/bin/
