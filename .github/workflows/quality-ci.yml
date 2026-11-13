@@ -1,0 +1,190 @@
+name: Quality CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Milestone snapshot (run on main after completing a stage)'
+        required: true
+        type: choice
+        default: regular-ci
+        options:
+          - regular-ci
+          - M1-prototype
+          - M2-infrastructure
+          - M3-backend
+          - M4-frontend
+          - M5-testing
+          - M6-release
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  backend:
+    name: "Backend: Checkstyle, JUnit, integration, JaCoCo, JAR"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: backend/**/*.gradle*
+      - name: Gradle wrapper permissions
+        run: chmod +x backend/gradlew
+      - name: Run Java static analysis, tests, coverage gate and build
+        working-directory: backend
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build
+          ./gradlew clean check bootJar --no-daemon --console=plain 2>&1 | tee gradle-ci.log
+      - name: Stage detailed backend reports (even on failure)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p backend/reports/backend/{static/checkstyle,tests,coverage,build}
+          cp backend/gradle-ci.log backend/reports/backend/build/gradle-ci.log 2>/dev/null || true
+          cp backend/build/reports/checkstyle/* backend/reports/backend/static/checkstyle/ 2>/dev/null || true
+          cp backend/build/test-results/test/TEST-*.xml backend/reports/backend/tests/ 2>/dev/null || true
+          cp -r backend/build/reports/tests/test backend/reports/backend/tests/html 2>/dev/null || true
+          cp backend/build/reports/jacoco/test/jacocoTestReport.* backend/reports/backend/coverage/ 2>/dev/null || true
+          cp -r backend/build/reports/jacoco/test/html backend/reports/backend/coverage/html 2>/dev/null || true
+          cp backend/build/libs/*.jar backend/reports/backend/build/ 2>/dev/null || true
+          find backend/reports/backend -type f | sort | head -80
+      - name: Publish backend reports and JAR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-report
+          path: backend/reports/backend/
+          if-no-files-found: warn
+          retention-days: 90
+
+  frontend:
+    name: "Frontend: ESLint, Prettier, Vitest, coverage, dist"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install exact frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Prepare report folders
+        run: mkdir -p frontend/reports/frontend/{static,tests,coverage,build}
+      - name: ESLint static analysis (JSON)
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint:ci 2>&1 | tee reports/frontend/static/eslint-console.txt
+      - name: Prettier style check (text)
+        if: always()
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run format:check 2>&1 | tee reports/frontend/static/prettier.txt
+      - name: Unit and UI integration tests + coverage (JUnit XML and HTML)
+        if: always()
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:ci 2>&1 | tee reports/frontend/tests/vitest-console.txt
+      - name: Production build
+        if: always()
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee reports/frontend/build/vite-build.log
+      - name: Stage website build
+        if: always()
+        shell: bash
+        run: cp -r frontend/dist frontend/reports/frontend/build/dist 2>/dev/null || true
+      - name: Publish frontend reports and dist
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-quality-report
+          path: frontend/reports/frontend/
+          if-no-files-found: warn
+          retention-days: 90
+
+  metrics:
+    name: "Metrics: coverage, tests, lint, Git, PR, CI history"
+    if: always()
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download backend quality reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: backend-quality-report
+          path: ci-input/backend
+      - name: Download frontend quality reports
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: frontend-quality-report
+          path: ci-input/frontend
+      - name: Generate metrics, per-test/issue CSV and Actions job summary
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STAGE_NAME: ${{ inputs.stage || 'regular-ci' }}
+        run: |
+          python3 scripts/collect_metrics.py \
+            --backend-dir ci-input/backend \
+            --frontend-dir ci-input/frontend \
+            --output-dir reports/summary \
+            --stage "$STAGE_NAME" \
+            --require-complete
+      - name: Upload detailed metrics snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-metrics-${{ github.run_number }}-${{ github.run_attempt }}
+          path: reports/summary/
+          if-no-files-found: warn
+          retention-days: 90
+
+  quality-gate:
+    name: Quality Gate
+    if: always()
+    needs: [backend, frontend, metrics]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide whether all mandatory jobs succeeded
+        shell: bash
+        env:
+          BACKEND: ${{ needs.backend.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          METRICS: ${{ needs.metrics.result }}
+        run: |
+          echo "Backend: $BACKEND"
+          echo "Frontend: $FRONTEND"
+          echo "Metrics: $METRICS"
+          {
+            echo '## Quality Gate'
+            echo "- Backend: **$BACKEND**"
+            echo "- Frontend: **$FRONTEND**"
+            echo "- Metrics: **$METRICS**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [[ "$BACKEND" == success && "$FRONTEND" == success && "$METRICS" == success ]]

@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "lint:ci": "eslint . --format json --output-file eslint-report.json",
-    "format:check": "prettier --check \"src/**/*.{js,jsx,css,md}\"",
+    "lint:ci": "eslint . --format json --output-file reports/frontend/static/eslint.json",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css}\"",
+    "format:fix": "prettier --write \"src/**/*.{js,jsx,css}\"",
     "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "test:ci": "vitest run --coverage",
+    "coverage": "vitest run --coverage",
+    "prelint:ci": "node scripts/prepare-reports.mjs",
+    "pretest": "node scripts/prepare-reports.mjs",
+    "pretest:ci": "node scripts/prepare-reports.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
