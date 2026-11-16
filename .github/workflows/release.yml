@@ -1,0 +1,73 @@
+name: Release (main only, after green CI)
+
+on:
+  workflow_run:
+    workflows: ['Quality CI']
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag main commit and publish GitHub Release
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify CI commit equals current HEAD of main
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          git fetch origin main --tags
+          MAIN_SHA="$(git rev-parse origin/main)"
+          echo "Green CI commit: $TESTED_SHA"
+          echo "main HEAD:       $MAIN_SHA"
+          test "$TESTED_SHA" = "$MAIN_SHA"
+          git checkout --detach "$TESTED_SHA"
+      - name: Check whether this commit has already been tagged
+        id: already
+        shell: bash
+        run: |
+          if git tag --points-at HEAD --list 'v*' | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo 'This main commit already has a version tag; nothing to do.'
+          fi
+      - name: Determine next semantic version
+        if: steps.already.outputs.skip != 'true'
+        id: version
+        shell: bash
+        run: |
+          NEXT="$(python3 scripts/next_release.py)"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Selected release version: $NEXT"
+      - name: Create tag and GitHub Release
+        if: steps.already.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, refusing to replace it."
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$TAG" "$SHA" -m "Release $TAG (green CI from main)"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" --repo "$REPO" --verify-tag \
+            --title "Culinary Craft $TAG" --generate-notes
+          echo "Released $TAG from tested main commit $SHA" >> "$GITHUB_STEP_SUMMARY"
