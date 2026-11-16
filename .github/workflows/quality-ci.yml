@@ -7,18 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: 'Milestone snapshot (run on main after completing a stage)'
+        description: 'Snapshot for laboratory milestone'
         required: true
         type: choice
         default: regular-ci
-        options:
-          - regular-ci
-          - M1-prototype
-          - M2-infrastructure
-          - M3-backend
-          - M4-frontend
-          - M5-testing
-          - M6-release
+        options: [regular-ci, M6-prototype, M7-testing]
 
 permissions:
   contents: read
@@ -27,7 +20,7 @@ permissions:
 
 jobs:
   backend:
-    name: "Backend: Checkstyle, JUnit, integration, JaCoCo, JAR"
+    name: 'Backend: Checkstyle, JUnit, integration, JaCoCo, JAR'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,16 +30,15 @@ jobs:
           java-version: '21'
           cache: gradle
           cache-dependency-path: backend/**/*.gradle*
-      - name: Gradle wrapper permissions
+      - name: Allow Gradle wrapper execution
         run: chmod +x backend/gradlew
-      - name: Run Java static analysis, tests, coverage gate and build
+      - name: Run tests, coverage and static checks
         working-directory: backend
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p build
           ./gradlew clean check bootJar --no-daemon --console=plain 2>&1 | tee gradle-ci.log
-      - name: Stage detailed backend reports (even on failure)
+      - name: Collect all backend reports (including failures)
         if: always()
         shell: bash
         run: |
@@ -58,51 +50,42 @@ jobs:
           cp backend/build/reports/jacoco/test/jacocoTestReport.* backend/reports/backend/coverage/ 2>/dev/null || true
           cp -r backend/build/reports/jacoco/test/html backend/reports/backend/coverage/html 2>/dev/null || true
           cp backend/build/libs/*.jar backend/reports/backend/build/ 2>/dev/null || true
-          find backend/reports/backend -type f | sort | head -80
-      - name: Publish backend reports and JAR
+      - name: Upload backend quality report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-quality-report
           path: backend/reports/backend/
           if-no-files-found: warn
-          retention-days: 90
+          retention-days: 60
 
   frontend:
-    name: "Frontend: ESLint, Prettier, Vitest, coverage, dist"
+    name: 'Frontend: ESLint, Vitest, coverage and production build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install exact frontend dependencies
+      - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Prepare report folders
-        run: mkdir -p frontend/reports/frontend/{static,tests,coverage,build}
-      - name: ESLint static analysis (JSON)
+        working-directory: frontend
+        run: node scripts/prepare-reports.mjs
+      - name: ESLint static analysis
         working-directory: frontend
         shell: bash
         run: |
           set -o pipefail
-          npm run lint:ci 2>&1 | tee reports/frontend/static/eslint-console.txt
-      - name: Prettier style check (text)
+          npm run lint:ci 2>&1 | tee reports/frontend/static/eslint-console.log
+      - name: Vitest unit and component tests with coverage
         if: always()
         working-directory: frontend
         shell: bash
         run: |
           set -o pipefail
-          npm run format:check 2>&1 | tee reports/frontend/static/prettier.txt
-      - name: Unit and UI integration tests + coverage (JUnit XML and HTML)
-        if: always()
-        working-directory: frontend
-        shell: bash
-        run: |
-          set -o pipefail
-          npm run test:ci 2>&1 | tee reports/frontend/tests/vitest-console.txt
+          npm run test:ci 2>&1 | tee reports/frontend/tests/vitest-console.log
       - name: Production build
         if: always()
         working-directory: frontend
@@ -110,42 +93,90 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee reports/frontend/build/vite-build.log
-      - name: Stage website build
+      - name: Collect production files
         if: always()
         shell: bash
         run: cp -r frontend/dist frontend/reports/frontend/build/dist 2>/dev/null || true
-      - name: Publish frontend reports and dist
+      - name: Upload frontend quality report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-quality-report
           path: frontend/reports/frontend/
           if-no-files-found: warn
-          retention-days: 90
+          retention-days: 60
+
+  e2e:
+    name: 'Browser E2E: real React + Spring Boot + Chromium'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: backend/**/*.gradle*
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Allow Gradle wrapper execution
+        run: chmod +x backend/gradlew
+      - name: Install frontend packages
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium and Linux browser libraries
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Prepare report directories
+        working-directory: frontend
+        run: node scripts/prepare-reports.mjs
+      - name: Test real user flows in browser
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: Upload browser HTML, JUnit XML, screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/reports/frontend/tests/playwright-junit.xml
+          if-no-files-found: warn
+          retention-days: 60
 
   metrics:
-    name: "Metrics: coverage, tests, lint, Git, PR, CI history"
+    name: 'Metrics: coverage, static checks, individual tests and Git history'
     if: always()
-    needs: [backend, frontend]
+    needs: [backend, frontend, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Download backend quality reports
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: backend-quality-report
           path: ci-input/backend
-      - name: Download frontend quality reports
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: frontend-quality-report
           path: ci-input/frontend
-      - name: Generate metrics, per-test/issue CSV and Actions job summary
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: browser-e2e-report
+          path: ci-input/browser
+      - name: Put Playwright JUnit results alongside frontend test reports
         shell: bash
+        run: |
+          mkdir -p ci-input/frontend/tests
+          REPORT="$(find ci-input/browser -type f -name playwright-junit.xml -print -quit 2>/dev/null || true)"
+          if [ -n "$REPORT" ]; then cp "$REPORT" ci-input/frontend/tests/playwright-junit.xml; fi
+      - name: Generate CSV, JSON, summary and per-test report
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STAGE_NAME: ${{ inputs.stage || 'regular-ci' }}
@@ -156,35 +187,34 @@ jobs:
             --output-dir reports/summary \
             --stage "$STAGE_NAME" \
             --require-complete
-      - name: Upload detailed metrics snapshot
+      - name: Upload metrics report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-metrics-${{ github.run_number }}-${{ github.run_attempt }}
           path: reports/summary/
           if-no-files-found: warn
-          retention-days: 90
+          retention-days: 60
 
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [backend, frontend, metrics]
+    needs: [backend, frontend, e2e, metrics]
     runs-on: ubuntu-latest
     steps:
-      - name: Decide whether all mandatory jobs succeeded
-        shell: bash
+      - name: Enforce all mandatory checks
         env:
           BACKEND: ${{ needs.backend.result }}
           FRONTEND: ${{ needs.frontend.result }}
+          E2E: ${{ needs.e2e.result }}
           METRICS: ${{ needs.metrics.result }}
+        shell: bash
         run: |
-          echo "Backend: $BACKEND"
-          echo "Frontend: $FRONTEND"
-          echo "Metrics: $METRICS"
           {
             echo '## Quality Gate'
             echo "- Backend: **$BACKEND**"
             echo "- Frontend: **$FRONTEND**"
+            echo "- E2E: **$E2E**"
             echo "- Metrics: **$METRICS**"
           } >> "$GITHUB_STEP_SUMMARY"
-          [[ "$BACKEND" == success && "$FRONTEND" == success && "$METRICS" == success ]]
+          [[ "$BACKEND" == success && "$FRONTEND" == success && "$E2E" == success && "$METRICS" == success ]]

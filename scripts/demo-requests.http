@@ -1,0 +1,48 @@
+### Запускай HTTP-запросы из VS Code с расширением REST Client
+### Backend: http://localhost:8080
+
+### Проверка сервера
+GET http://localhost:8080/api/health
+
+### Публичный каталог: поиск
+GET http://localhost:8080/api/recipes?search=паста&size=6
+
+### Карточка рецепта
+GET http://localhost:8080/api/recipes/1
+
+### Личный кабинет Анны (X-Demo-User: 1)
+GET http://localhost:8080/api/recipes/mine
+X-Demo-User: 1
+
+### Создание рецепта от Анны (появится в очереди модерации)
+POST http://localhost:8080/api/recipes
+Content-Type: application/json
+X-Demo-User: 1
+
+{
+  "title": "Запечённые яблоки",
+  "description": "Тёплый домашний десерт с корицей и мёдом",
+  "category": "Десерты",
+  "emoji": "🍎",
+  "imageUrl": "",
+  "prepMinutes": 25,
+  "servings": 2,
+  "difficulty": "Легко",
+  "ingredients": ["Яблоки — 2 шт.", "Мёд — 2 ч. л.", "Корица — 1 щепотка"],
+  "steps": ["Нагрейте духовку до 180 °C.", "Удалите сердцевину яблок.", "Добавьте мёд и корицу, запекайте 20 минут."],
+  "tags": ["Быстро", "В духовке"]
+}
+
+### Очередь модерации — Марина, администратор
+GET http://localhost:8080/api/recipes/pending
+X-Demo-User: 3
+
+### Одобрение нового рецепта (после создания обычно ID = 101)
+POST http://localhost:8080/api/recipes/101/moderate
+X-Demo-User: 3
+Content-Type: application/json
+
+{ "status": "APPROVED" }
+
+### Обновлённый каталог
+GET http://localhost:8080/api/recipes?sort=newest
