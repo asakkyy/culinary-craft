@@ -1,31 +1,23 @@
-# Java / Gradle
-backend/build/
-backend/.gradle/
-*.class
-
-# Node / React
-frontend/node_modules/
-frontend/dist/
-npm-debug.log*
 node_modules/
-
-# IDE
+**/node_modules/
+dist/
+**/dist/
+.gradle/
+**/.gradle/
+build/
+**/build/
+.env
+*.log
 .idea/
 .vscode/
-*.iml
-
-# OS
 .DS_Store
-
-# Test & Coverage reports
-frontend/test-results.xml
-frontend/eslint-report.json
+.local-tools/
 frontend/coverage/
-backend/build/test-results/
-# Generated CI reports (download from Actions, do not commit)
-reports/
 frontend/reports/
+frontend/test-results/
+frontend/playwright-report/
 backend/reports/
-__pycache__/
+reports/
+ci-input/
 *.pyc
-backend/bin/
+__pycache__/

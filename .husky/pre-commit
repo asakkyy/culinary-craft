@@ -4,4 +4,4 @@ ROOT="$(git rev-parse --show-toplevel)"
 printf 'Frontend: ESLint and Vitest...\n'
 (cd "$ROOT/frontend" && npm run lint && npm run test)
 printf 'Backend: Checkstyle and JUnit...\n'
-(cd "$ROOT/backend" && ./gradlew checkstyleMain checkstyleTest test --no-daemon)
+(cd "$ROOT/backend" && sh ./gradlew checkstyleMain checkstyleTest test --no-daemon)

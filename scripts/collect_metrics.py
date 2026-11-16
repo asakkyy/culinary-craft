@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""Compile detailed reports from JUnit, JaCoCo, ESLint, Vitest and Git into one CI artifact.
-
-No third-party Python dependencies. Missing measurements are marked N/A, never invented.
-"""
 import argparse
 import csv
 import json
@@ -205,7 +201,8 @@ def main():
     backend_cov = jacoco(backend / 'coverage/jacocoTestReport.xml')
     frontend_cov = vitest_coverage(frontend / 'coverage/coverage-summary.json')
     java_tests = junit_files(sorted((backend / 'tests').glob('TEST-*.xml')), 'Java/JUnit')
-    js_tests = junit_files([frontend / 'tests/junit.xml'], 'React/Vitest')
+    js_tests = junit_files([frontend / 'tests/vitest-junit.xml'], 'React/Vitest')
+    browser_tests = junit_files([frontend / 'tests/playwright-junit.xml'], 'Browser/Playwright')
     java_lint, java_issues = checkstyle([
         backend / 'static/checkstyle/main.xml', backend / 'static/checkstyle/test.xml'])
     js_lint, js_issues = eslint(frontend / 'static/eslint.json')
@@ -217,17 +214,18 @@ def main():
         'stage': args.stage,
         'backend': {'coverage': backend_cov, 'tests': {k: v for k, v in java_tests.items()
                                                      if k != 'cases'}, 'checkstyle': java_lint},
+        'browser': {'tests': {k: v for k, v in browser_tests.items() if k != 'cases'}},
         'frontend': {'coverage': frontend_cov, 'tests': {k: v for k, v in js_tests.items()
                                                        if k != 'cases'}, 'eslint': js_lint},
         'git': {k: v for k, v in git_data.items() if k != 'commits'},
         'github_ci': remote_data,
         'measurements_complete': bool(backend_cov and frontend_cov and
-                                      java_tests['total'] and js_tests['total'] and
+                                      java_tests['total'] and js_tests['total'] and browser_tests['total'] and
                                       java_lint and js_lint),
     }
     (out / 'metrics.json').write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     save_csv(out / 'test-cases.csv', ['scope', 'test', 'status', 'seconds'],
-             java_tests['cases'] + js_tests['cases'])
+             java_tests['cases'] + js_tests['cases'] + browser_tests['cases'])
     save_csv(out / 'static-issues.csv', ['scope', 'file', 'line', 'severity', 'rule', 'message'],
              java_issues + js_issues)
     save_csv(out / 'git-commits.csv', ['sha', 'date', 'subject', 'added', 'deleted', 'size'],
@@ -239,7 +237,7 @@ def main():
                      'unit': unit, 'source': source,
                      'status': 'measured' if value is not None else 'missing'})
 
-    for prefix, tests in [('backend', java_tests), ('frontend', js_tests)]:
+    for prefix, tests in [('backend', java_tests), ('frontend', js_tests), ('browser', browser_tests)]:
         for item in ('total', 'passed', 'failed', 'skipped', 'seconds'):
             add(f'{prefix}.tests.{item}', tests[item] if tests['total'] else None,
                 'seconds' if item == 'seconds' else 'tests', f'{prefix}/tests')
@@ -279,18 +277,18 @@ def main():
         '# Culinary Craft — подробные метрики качества',
         f"**Этап:** `{args.stage}` · **Коммит:** `{git_data['head'] or 'N/A'}` · "
         f"**UTC:** {result['collected_at_utc']}", '',
-        '| Метрика | Backend | Frontend |', '|---|---:|---:|',
-        f"| Тестов выполнено | {java_tests['total']} | {js_tests['total']} |",
-        f"| Пройдено | {java_tests['passed']} | {js_tests['passed']} |",
-        f"| Ошибок | {java_tests['failed']} | {js_tests['failed']} |",
-        f"| Пропущено | {java_tests['skipped']} | {js_tests['skipped']} |",
-        f"| Время тестовых методов (с) | {java_tests['seconds']} | {js_tests['seconds']} |",
+        '| Метрика | Backend | Frontend | Браузер |', '|---|---:|---:|---:|',
+        f"| Тестов выполнено | {java_tests['total']} | {js_tests['total']} | {browser_tests['total']} |",
+        f"| Пройдено | {java_tests['passed']} | {js_tests['passed']} | {browser_tests['passed']} |",
+        f"| Ошибок | {java_tests['failed']} | {js_tests['failed']} | {browser_tests['failed']} |",
+        f"| Пропущено | {java_tests['skipped']} | {js_tests['skipped']} | {browser_tests['skipped']} |",
+        f"| Время тестовых методов (с) | {java_tests['seconds']} | {js_tests['seconds']} | {browser_tests['seconds']} |",
         f"| Покрытие строк | {val(backend_cov.get('line', {}).get('pct'), '%')} | "
-        f"{val(frontend_cov.get('lines', {}).get('pct'), '%')} |",
+        f"{val(frontend_cov.get('lines', {}).get('pct'), '%')} | — |",
         f"| Покрытие ветвлений | {val(backend_cov.get('branch', {}).get('pct'), '%')} | "
-        f"{val(frontend_cov.get('branches', {}).get('pct'), '%')} |",
-        f"| Ошибки статического анализа | {val(java_lint.get('errors'))} | {val(js_lint.get('errors'))} |",
-        f"| Предупреждения | {val(java_lint.get('warnings'))} | {val(js_lint.get('warnings'))} |",
+        f"{val(frontend_cov.get('branches', {}).get('pct'), '%')} | — |",
+        f"| Ошибки статического анализа | {val(java_lint.get('errors'))} | {val(js_lint.get('errors'))} | — |",
+        f"| Предупреждения | {val(java_lint.get('warnings'))} | {val(js_lint.get('warnings'))} | — |",
         '', '## Git-метрики',
         f"- Коммитов за 7 дней: **{val(git_data['last_7d'])}**",
         f"- Коммитов за 30 дней: **{val(git_data['last_30d'])}**",
