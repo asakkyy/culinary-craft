@@ -1,23 +1,12 @@
 {
   "name": "culinary-craft",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "version": "0.7.0",
+  "description": "Conventional Commits and Husky hooks for Culinary Craft prototype",
   "scripts": {
-    "test": "vitest run --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "npm --prefix frontend run test:ci"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/asakkyy/culinary-craft.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/asakkyy/culinary-craft/issues"
-  },
-  "homepage": "https://github.com/asakkyy/culinary-craft#readme",
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",

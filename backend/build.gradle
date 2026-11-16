@@ -1,49 +1,67 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '4.1.2'
-	id 'io.spring.dependency-management' version '1.1.7'
-	id 'checkstyle'
-	id 'jacoco'
-}
-
-
-
-checkstyle {
-    toolVersion = '10.12.4'
-    configFile = file('config/checkstyle/checkstyle.xml')
-}
-
-jacocoTestReport {
-	dependsOn test
-	reports {
-		xml.required = true // <--- Обязательно true
-		csv.required = false
-		html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
-	}
+    id 'java'
+    id 'jacoco'
+    id 'checkstyle'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.culinarycraft'
-version = '0.0.1-SNAPSHOT'
+version = '0.7.0-SNAPSHOT'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
-repositories {
-	mavenCentral()
-}
+repositories { mavenCentral() }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	runtimeOnly 'org.postgresql:postgresql'
-	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
+checkstyle {
+    toolVersion = '10.21.4'
+    configFile = file('config/checkstyle/checkstyle.xml')
+    ignoreFailures = false
+}
+
+tasks.withType(Checkstyle).configureEach {
+    reports { xml.required = true; html.required = true }
+}
+
+jacoco { toolVersion = '0.8.13' }
+
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
+    finalizedBy tasks.named('jacocoTestReport')
+    testLogging {
+        events 'failed', 'skipped'
+        exceptionFormat = 'full'
+    }
+}
+
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    reports {
+        xml.required = true
+        csv.required = true
+        html.required = true
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    dependsOn tasks.named('jacocoTestReport')
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit { counter = 'LINE'; value = 'COVEREDRATIO'; minimum = 0.35 }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }
