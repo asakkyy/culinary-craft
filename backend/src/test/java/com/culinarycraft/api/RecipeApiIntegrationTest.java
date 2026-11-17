@@ -4,21 +4,18 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.culinarycraft.PostgresIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.culinarycraft.model.RecipeRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Full Spring MVC integration tests: JSON validation, headers, controller, service. */
-@SpringBootTest
-@AutoConfigureMockMvc
-class RecipeApiIntegrationTest {
+class RecipeApiIntegrationTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
 
@@ -39,7 +36,8 @@ class RecipeApiIntegrationTest {
 
     @Test void healthEndpointWorks() throws Exception {
         mvc.perform(get("/api/health")).andExpect(status().isOk())
-            .andExpect(jsonPath("$.status").value("UP"));
+            .andExpect(jsonPath("$.status").value("UP"))
+            .andExpect(jsonPath("$.storage").value("POSTGRESQL"));
     }
 
     @Test void demoUsersAndRolesAreAvailable() throws Exception {
@@ -129,5 +127,13 @@ class RecipeApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rating\":9,\"comment\":\"ok\"}"))
             .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/recipes/1/reviews").header("X-Demo-User", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rating\":4,\"comment\":\"Очень вкусно\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.rating").value(4));
+        mvc.perform(post("/api/recipes/1/reviews").header("X-Demo-User", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"rating\":5,\"comment\":\"Повторный отзыв\"}"))
+            .andExpect(status().isConflict());
     }
 }

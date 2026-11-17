@@ -109,6 +109,22 @@ jobs:
   e2e:
     name: 'Browser E2E: real React + Spring Boot + Chromium'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: culinary_craft
+          POSTGRES_USER: culinary_demo
+          POSTGRES_PASSWORD: culinary_demo_local
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U culinary_demo -d culinary_craft"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DB_URL: jdbc:postgresql://127.0.0.1:5432/culinary_craft
+      DB_USERNAME: culinary_demo
+      DB_PASSWORD: culinary_demo_local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

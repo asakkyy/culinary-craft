@@ -17,6 +17,7 @@ frontend/reports/
 frontend/test-results/
 frontend/playwright-report/
 backend/reports/
+backend/bin/
 reports/
 ci-input/
 *.pyc
