@@ -47,6 +47,7 @@ tasks.withType(Checkstyle).configureEach {
 jacoco { toolVersion = '0.8.13' }
 
 tasks.named('test') {
+    environment 'MEDIA_ROOT', layout.buildDirectory.dir('tmp/media-tests-' + java.util.UUID.randomUUID()).get().asFile.absolutePath
     environment 'JWT_SECRET', java.util.Base64.encoder.encodeToString(java.security.SecureRandom.getSeed(48))
     useJUnitPlatform()
     finalizedBy tasks.named('jacocoTestReport')

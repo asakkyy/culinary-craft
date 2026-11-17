@@ -1,3 +1,6 @@
+# Backend runs on the host: MEDIA_ROOT points to a persistent host directory.
+# When containerizing backend, mount the same directory into that service;
+# PostgreSQL volumes do not contain uploaded files.
 services:
   postgres:
     image: postgres:17-alpine

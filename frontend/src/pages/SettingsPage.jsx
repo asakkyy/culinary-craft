@@ -1,3 +1,4 @@
+import ImageUpload from '../components/ImageUpload';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, errorText } from '../api/client';
@@ -28,6 +29,9 @@ export default function SettingsPage() {
     finally { setBusy(false); }
   }
   return <div className="container editor-page"><h1>Настройки аккаунта</h1>
+    <section className="editor-card"><h2>Аватар</h2><ImageUpload label="Аватар" url={user.avatarUrl} busy={busy}
+      onFile={async file => { setBusy(true); try { await api.avatar(file); await refreshUser(); notify('Аватар сохранён'); } catch (err) { throw new Error(errorText(err)); } finally { setBusy(false); } }}
+      onDelete={async () => { await api.deleteAvatar(); await refreshUser(); }}/></section>
     {error && <p className="error-box" role="alert">{error}</p>}
     <section className="editor-card"><h2>Имя</h2><form onSubmit={e => save(e, 'name')}>
       <div className="field"><label htmlFor="profile-name">Отображаемое имя</label><input id="profile-name" minLength={2} maxLength={80} required value={name} onChange={e => setName(e.target.value)}/></div>

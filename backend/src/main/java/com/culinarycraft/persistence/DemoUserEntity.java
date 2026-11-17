@@ -47,6 +47,7 @@ public class DemoUserEntity {
     }
     public void changeEmail(String value) { email = value; updatedAt = java.time.Instant.now(); }
     public void changePassword(String hash) { passwordHash = hash; revokeTokens(); updatedAt = java.time.Instant.now(); }
+    public void avatar(String url) { avatarUrl = url; updatedAt = java.time.Instant.now(); }
 
     public DemoUser toModel() { return new DemoUser(id, name, role, initials, subtitle); }
 }

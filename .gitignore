@@ -12,6 +12,8 @@ build/
 .vscode/
 .DS_Store
 .local-tools/
+data/media/
+backend/data/media/
 frontend/coverage/
 frontend/reports/
 frontend/test-results/

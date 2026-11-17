@@ -22,7 +22,12 @@ export function errorText(error) {
   return 'Не удалось выполнить действие. Попробуйте ещё раз.';
 }
 
+const formFile = file => { const form = new FormData(); form.append('file', file); return form; };
 export const api = {
+  avatar: file => http.post('/account/avatar', formFile(file)).then(r => r.data),
+  deleteAvatar: () => http.delete('/account/avatar'),
+  photo: (id, file) => http.post('/recipes/'+id+'/photo', formFile(file)).then(r => r.data),
+  deletePhoto: id => http.delete('/recipes/'+id+'/photo'),
   profileName: data => http.put('/account/profile', data).then(r => r.data),
   profileEmail: data => http.put('/account/email', data).then(r => r.data),
   profilePassword: data => http.put('/account/password', data),

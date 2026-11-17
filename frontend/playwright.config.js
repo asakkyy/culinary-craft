@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 if (!process.env.E2E_DB_URL) throw new Error('Set E2E_DB_URL to an isolated test database');
 process.env.CC_E2E_ADMIN_PASSWORD ||= randomBytes(24).toString('hex');
 
@@ -18,7 +21,7 @@ export default defineConfig({
     {
       command: process.platform === 'win32' ? 'gradlew.bat bootRun' : './gradlew bootRun',
       cwd: '../backend',
-      env: { DB_URL: process.env.E2E_DB_URL, JWT_SECRET: randomBytes(48).toString('base64'), COOKIE_SECURE: 'false', BOOTSTRAP_ADMIN: 'true', ADMIN_EMAIL: 'admin@e2e.invalid', ADMIN_PASSWORD: process.env.CC_E2E_ADMIN_PASSWORD },
+      env: { MEDIA_ROOT: mkdtempSync(join(tmpdir(), 'culinary-e2e-media-')), DB_URL: process.env.E2E_DB_URL, JWT_SECRET: randomBytes(48).toString('base64'), COOKIE_SECURE: 'false', BOOTSTRAP_ADMIN: 'true', ADMIN_EMAIL: 'admin@e2e.invalid', ADMIN_PASSWORD: process.env.CC_E2E_ADMIN_PASSWORD },
       url: 'http://127.0.0.1:8080/api/health',
       reuseExistingServer: false,
       timeout: 180000,

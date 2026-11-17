@@ -1,4 +1,8 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
+async function image(page) {
+  const data = await page.evaluate(() => { const c = document.createElement('canvas'); c.width=4; c.height=3; c.getContext('2d').fillRect(0,0,4,3); return c.toDataURL('image/png').split(',')[1]; });
+  return { name: 'test.png', mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
+}
 test('Настройки профиля и смена пароля с повторным входом', async ({ page }) => {
   const email = `settings${Date.now()}@e2e.invalid`;
   await page.goto('/register');
@@ -8,9 +12,11 @@ test('Настройки профиля и смена пароля с повто
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
   await page.goto('/settings');
+  await page.getByLabel('Аватар', { exact: true }).setInputFiles(await image(page));
+  await expect(page.locator('.user-chip img')).toBeVisible();
   await page.getByLabel('Отображаемое имя').fill('Обновлённый автор');
   await page.getByRole('button', { name: 'Сохранить имя' }).click();
-  await expect(page.getByRole('status')).toHaveText(/Изменения сохранены/);
+  await expect(page.locator('.toast')).toHaveText(/Изменения сохранены/);
   await page.reload();
   await expect(page.getByLabel('Отображаемое имя')).toHaveValue('Обновлённый автор');
   await page.getByLabel('Текущий пароль', { exact: true }).fill('Current password 123');
@@ -52,8 +58,10 @@ test('Регистрация, восстановление сессии, рец�
   await page.getByLabel(/Краткое описание/).fill('Описание настоящего авторского рецепта для браузерного теста');
   await page.getByRole('textbox', { name: 'Ингредиент 1' }).fill('Овощи — 200 г');
   await page.getByRole('textbox', { name: 'Шаг 1' }).fill('Нарезать и сварить');
+  await page.getByLabel('Фотография рецепта', { exact: true }).setInputFiles(await image(page));
   await page.getByRole('button', { name: 'Отправить рецепт' }).click();
   await expect(page).toHaveURL(/\/recipes\/\d+$/);
+  await expect(page.locator('.detail-cover img')).toHaveAttribute('src', /\/api\/media\//);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
