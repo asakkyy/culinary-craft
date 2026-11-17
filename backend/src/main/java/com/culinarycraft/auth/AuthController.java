@@ -24,7 +24,11 @@ public class AuthController {
         return java.util.Map.of("token", token.getToken());
     }
     @PostMapping("/register") @ResponseStatus(HttpStatus.CREATED)
-    public AccountView register(@Valid @RequestBody AccountService.Registration request) { return accounts.register(request); }
+    public java.util.Map<String, String> register(@Valid @RequestBody AccountService.Registration request) {
+        try { accounts.register(request); }
+        catch (org.springframework.web.server.ResponseStatusException error) { if (error.getStatusCode().value() != 409) throw error; }
+        return AccountEmailController.accepted();
+    }
     @PostMapping("/login") public AccountView login(@Valid @RequestBody AccountService.Login request, HttpServletResponse response) {
         if (!limits.allow("login-account", request.email().strip().toLowerCase(java.util.Locale.ROOT), 10, 600)) {
             response.setHeader("Retry-After", "600");

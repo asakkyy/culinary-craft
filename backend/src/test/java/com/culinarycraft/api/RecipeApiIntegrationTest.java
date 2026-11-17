@@ -19,6 +19,11 @@ import org.springframework.test.web.servlet.MockMvc;
 class RecipeApiIntegrationTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate fixtureJdbc;
+    @org.junit.jupiter.api.BeforeEach void verifiedDomainFixtures() {
+        // These controller tests inject mocked JWTs for historical domain fixtures, never real legacy login.
+        fixtureJdbc.update("update demo_users set email_verified_at = current_timestamp where id in (1,2,3)");
+    }
 
     private String request(String title) throws Exception {
         return json.writeValueAsString(new RecipeRequest(title,

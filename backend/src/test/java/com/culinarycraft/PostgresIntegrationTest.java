@@ -15,6 +15,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @Import(PostgresIntegrationTest.Database.class)
 @Transactional
 public abstract class PostgresIntegrationTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    protected org.springframework.mail.javamail.JavaMailSender testMailSender;
     @org.springframework.beans.factory.annotation.Autowired org.springframework.jdbc.core.JdbcTemplate limitJdbc;
     @org.springframework.beans.factory.annotation.Autowired org.springframework.transaction.PlatformTransactionManager limitTransactions;
     @org.junit.jupiter.api.BeforeEach void isolateRateLimitState() {

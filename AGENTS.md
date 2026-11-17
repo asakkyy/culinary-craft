@@ -2,6 +2,13 @@
 
 ## Quality hardening
 
+- V7: хешированные одноразовые email-токены, SMTP через Spring Mail, локально Mailpit.
+- До email verification разрешены вход/настройки, запись контента запрещена SecurityFilterChain.
+- Не делать LEGACY активными. V7 доверяет только существующим не-legacy ADMIN, USER подтверждают адрес.
+- Recovery/verification — публичные CSRF-защищённые POST, одинаковый 202 для неизвестного адреса.
+- Отправка после commit асинхронно; токены не логировать, не сохранять в outbox в открытом виде.
+- E2E требует отдельные PostgreSQL и Mailpit, внешняя почта в тестах запрещена.
+
 - Ветка feature/security-reliability-hardening: V6 authentication_limits.
 - Ограничители входа/регистрации хранятся в PostgreSQL в отдельных транзакциях:
   ошибки входа не откатывают счётчики. Не доверять пользовательскому X-Forwarded-For.

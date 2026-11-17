@@ -20,6 +20,7 @@ java {
 repositories { mavenCentral() }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     testImplementation 'org.springframework.security:spring-security-test'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -47,6 +48,8 @@ tasks.withType(Checkstyle).configureEach {
 jacoco { toolVersion = '0.8.13' }
 
 tasks.named('test') {
+    environment 'MAIL_HOST', '127.0.0.1'
+    environment 'MAIL_PORT', '1'
     environment 'MEDIA_ROOT', layout.buildDirectory.dir('tmp/media-tests-' + java.util.UUID.randomUUID()).get().asFile.absolutePath
     environment 'JWT_SECRET', java.util.Base64.encoder.encodeToString(java.security.SecureRandom.getSeed(48))
     useJUnitPlatform()

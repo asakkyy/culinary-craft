@@ -27,8 +27,15 @@ class MediaApiTest extends PostgresIntegrationTest {
     @Autowired ImageStorage storage;
     private Cookie account(String email) {
         accounts.register(new AccountService.Registration("Author", email, "Test password 12345"));
+        jdbcVerification(email);
         return new Cookie("cc-session", tokens.issue(accounts.login(new AccountService.Login(email, "Test password 12345"))));
     }
+    private void jdbcVerification(String email) {
+        files.flush();
+        // Fixture for the already-verified author scenarios; verification itself has separate API tests.
+        usersForVerification.findByEmailIgnoreCase(email).orElseThrow().verifyEmail();
+    }
+    @Autowired com.culinarycraft.persistence.DemoUserRepository usersForVerification;
     private MockMultipartFile png(String name) throws Exception {
         var out = new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(4, 3, BufferedImage.TYPE_INT_RGB), "png", out);
         return new MockMultipartFile("file", name, "application/octet-stream", out.toByteArray());

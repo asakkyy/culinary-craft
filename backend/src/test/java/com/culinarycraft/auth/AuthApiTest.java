@@ -28,7 +28,8 @@ class AuthApiTest extends PostgresIntegrationTest {
     private Cookie login() throws Exception {
         mvc.perform(post("/api/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content(body("author@example.test", password))).andExpect(status().isCreated())
-            .andExpect(jsonPath("$.role").value("USER")).andExpect(jsonPath("$.passwordHash").doesNotExist());
+            .andExpect(jsonPath("$.message").exists()).andExpect(jsonPath("$.passwordHash").doesNotExist());
+        assertEquals("USER", users.findByEmailIgnoreCase("author@example.test").orElseThrow().getRole());
         return mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content(body("AUTHOR@example.test", password))).andExpect(status().isOk())
             .andReturn().getResponse().getCookie("cc-session");
@@ -44,7 +45,7 @@ class AuthApiTest extends PostgresIntegrationTest {
     @Test void invalidAndDuplicateEmailsAndWrongPassword() throws Exception {
         login();
         mvc.perform(post("/api/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-            .content(body("AUTHOR@example.test", password))).andExpect(status().isConflict());
+            .content(body("AUTHOR@example.test", password))).andExpect(status().isCreated());
         mvc.perform(post("/api/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)
             .content(body("not-email", password))).andExpect(status().isBadRequest());
         mvc.perform(post("/api/auth/register").with(csrf()).contentType(MediaType.APPLICATION_JSON)

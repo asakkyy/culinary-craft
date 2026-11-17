@@ -15,12 +15,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class ProfileService {
     public record Name(@NotBlank @Size(min = 2, max = 80) String name) {}
     public record Email(@NotBlank @jakarta.validation.constraints.Email @Size(max = 254) String email,
-                        @NotBlank @Size(max = 64) String currentPassword) {}
+                        @NotBlank @Size(max = 64) String currentPassword) {
+        @Override public String toString() { return "Email[redacted]"; }
+    }
     public record Password(@NotBlank @Size(max = 64) String currentPassword,
-                           @NotBlank @Size(min = 12, max = 64) String newPassword) {}
+                           @NotBlank @Size(min = 12, max = 64) String newPassword) {
+        @Override public String toString() { return "Password[redacted]"; }
+    }
     private final DemoUserRepository users;
     private final PasswordEncoder passwords;
-    public ProfileService(DemoUserRepository users, PasswordEncoder passwords) { this.users = users; this.passwords = passwords; }
+    private final AccountEmailService emails;
+    public ProfileService(DemoUserRepository users, PasswordEncoder passwords, AccountEmailService emails) { this.users = users; this.passwords = passwords; this.emails = emails; }
     private DemoUserEntity account(long id) {
         var user = users.lockById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (!"ACTIVE".equals(user.getStatus())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Аккаунт недоступен");
@@ -47,6 +52,7 @@ public class ProfileService {
         try { users.flush(); } catch (org.springframework.dao.DataIntegrityViolationException error) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email уже используется");
         }
+        emails.verification(id);
         return AccountView.of(user);
     }
     public void password(long id, Password input) {

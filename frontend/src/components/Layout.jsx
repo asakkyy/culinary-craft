@@ -37,6 +37,7 @@ export default function Layout({ children }) {
             <Avatar user={user}/><span className="user-chip-name">{user ? user.name.split(' ')[0] : 'Гость'}</span><span className="tiny-chevron">⌄</span>
           </button></div>
       </div></header>
+      {user?.emailVerified === false && <p className="container error-box">Подтвердите email для изменения контента. <Link to="/resend-verification">Запросить письмо</Link></p>}
       <main>{children}</main>
       <footer className="site-footer"><div className="container footer-inner">
         <div><Link to="/" className="footer-brand"><ChefHat size={25} /> CulinaryCraft</Link><p>Место, где рецепты превращаются в любимые традиции.</p></div>
