@@ -21,7 +21,7 @@ beforeEach(() => {
 it('неавторизованный гость не видит форму создания', () => {
   useApp.mockReturnValue({ user: null, setPickerOpen: vi.fn() });
   renderPage(<EditorPage />);
-  expect(screen.getByText('Авторизуйся в демо-режиме')).toBeInTheDocument();
+  expect(screen.getByText('Войдите, чтобы создать рецепт')).toBeInTheDocument();
 });
 
 it('динамически добавляет ингредиенты и шаги', async () => {
@@ -52,15 +52,26 @@ it('отправляет данные формы в API для модераци�
   await user.type(screen.getByRole('textbox', { name: 'Шаг 1' }), 'Нарезать овощи');
   await user.type(screen.getByLabelText('Теги через запятую'), 'Домашнее, Быстро');
   await user.click(screen.getByRole('button', { name: 'Отправить рецепт' }));
-  await waitFor(() => expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
-    title: 'Домашний суп', ingredients: ['Морковь'], steps: ['Нарезать овощи'], tags: ['Домашнее', 'Быстро'],
-  })));
+  await waitFor(() =>
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Домашний суп',
+        ingredients: ['Морковь'],
+        steps: ['Нарезать овощи'],
+        tags: ['Домашнее', 'Быстро'],
+      }),
+    ),
+  );
 });
 
 it('загружает существующий рецепт для редактирования', async () => {
-  render(<MemoryRouter initialEntries={['/recipes/123/edit']}><Routes>
-    <Route path="/recipes/:id/edit" element={<EditorPage />} />
-  </Routes></MemoryRouter>);
+  render(
+    <MemoryRouter initialEntries={['/recipes/123/edit']}>
+      <Routes>
+        <Route path="/recipes/:id/edit" element={<EditorPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
   expect(await screen.findByDisplayValue('Тестовый домашний суп')).toBeInTheDocument();
   expect(api.one).toHaveBeenCalledWith('123');
 });

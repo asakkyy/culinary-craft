@@ -19,8 +19,11 @@ export default function RecipeCard({ recipe, onChanged }) {
       notify(result.favorite ? 'Рецепт в избранном' : 'Удалено из избранного');
       changed();
       if (onChanged) onChanged();
-    } catch (error) { showError(error); }
-    finally { setBusy(false); }
+    } catch (error) {
+      showError(error);
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <article className="recipe-card">
@@ -28,16 +31,35 @@ export default function RecipeCard({ recipe, onChanged }) {
         <CoverImage recipe={recipe} />
         <span className="card-category">{recipe.category}</span>
       </Link>
-      <button className={`favorite-button ${saved ? 'is-saved' : ''}`} onClick={toggle}
-        title={saved ? 'Удалить из избранного' : 'Добавить в избранное'} disabled={busy} aria-label="Избранное">
+      <button
+        className={`favorite-button ${saved ? 'is-saved' : ''}`}
+        onClick={toggle}
+        aria-pressed={saved}
+        title={saved ? 'Удалить из избранного' : 'Добавить в избранное'}
+        disabled={busy}
+        aria-label="Избранное"
+      >
         <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
       </button>
       <div className="recipe-card-body">
-        <div className="recipe-card-meta"><span><Clock3 size={14} /> {recipe.prepMinutes} мин</span>
-          <span><Star size={14} fill="currentColor" /> {recipe.reviewCount ? recipe.rating.toFixed(1) : 'Новинка'}</span></div>
-        <Link to={`/recipes/${recipe.id}`} className="recipe-title-link"><h3>{recipe.title}</h3></Link>
+        <div className="recipe-card-meta">
+          <span>
+            <Clock3 size={14} /> {recipe.prepMinutes} мин
+          </span>
+          <span>
+            <Star size={14} fill="currentColor" /> {recipe.reviewCount ? recipe.rating.toFixed(1) : 'Новинка'}
+          </span>
+        </div>
+        <Link to={`/recipes/${recipe.id}`} className="recipe-title-link">
+          <h3>{recipe.title}</h3>
+        </Link>
         <p>{recipe.description}</p>
-        <div className="card-bottom"><span>от {recipe.ownerName}</span><Link to={`/recipes/${recipe.id}`} aria-label="Подробнее"><ArrowUpRight size={19} /></Link></div>
+        <div className="card-bottom">
+          <span>от {recipe.ownerName}</span>
+          <Link to={`/recipes/${recipe.id}`} aria-label="Подробнее">
+            <ArrowUpRight size={19} />
+          </Link>
+        </div>
       </div>
     </article>
   );

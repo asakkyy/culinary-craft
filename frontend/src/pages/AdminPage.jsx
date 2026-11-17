@@ -1,52 +1,565 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { createElement, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ClipboardList, Users, ScrollText, BookOpen, HardDrive, LayoutDashboard, ExternalLink } from 'lucide-react';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
 import ModerationPage from './ModerationPage';
 import MediaMaintenance from '../components/MediaMaintenance';
 import { reasons } from '../components/ReportForm';
 import { reportStatuses } from './ReportsPage';
+import Avatar from '../components/Avatar';
+import Modal from '../components/Modal';
+import ReportRecipeSummary from '../components/ReportRecipeSummary';
+import DataTable, { StatusBadge, TablePagination } from '../components/DataTable';
+
+const userStatuses = { ACTIVE: 'Активен', BLOCKED: 'Заблокирован', LEGACY: 'Архивный аккаунт' };
+const roles = { USER: 'Пользователь', ADMIN: 'Администратор' };
+const events = {
+  USER_BLOCKED: 'Пользователь заблокирован',
+  USER_UNBLOCKED: 'Доступ восстановлен',
+  REPORT_IN_REVIEW: 'Жалоба принята в работу',
+  REPORT_RESOLVED: 'Жалоба закрыта',
+  REPORT_REJECTED: 'Жалоба отклонена',
+  RECIPE_APPROVED: 'Рецепт опубликован',
+  RECIPE_REJECTED: 'Рецепт отклонён',
+  RECIPE_UNPUBLISHED: 'Рецепт снят с публикации',
+};
+const targets = { RECIPE: 'Рецепт', USER: 'Пользователь', REPORT: 'Жалоба' };
+const sections = {
+  overview: ['Обзор', LayoutDashboard],
+  reports: ['Жалобы', ClipboardList],
+  users: ['Пользователи', Users],
+  audit: ['Аудит', ScrollText],
+  recipes: ['Рецепты', BookOpen],
+  storage: ['Хранилище', HardDrive],
+};
+const date = (value) => (value ? new Date(value).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+const detail = (item) =>
+  item.details?.startsWith('Status:')
+    ? events[item.action]
+    : item.details === 'Access restored'
+      ? 'Доступ к аккаунту восстановлен'
+      : item.details;
 
 export default function AdminPage() {
   const { user, notify } = useApp();
-  const [tab, setTab] = useState('reports'); const [status, setStatus] = useState('');
-  const [search, setSearch] = useState(''); const [page, setPage] = useState(0); const [version, setVersion] = useState(0);
-  const [data, setData] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const [comments, setComments] = useState({});
+  const [params, setParams] = useSearchParams();
+  const tab = Object.hasOwn(sections, params.get('section')) ? params.get('section') : 'reports';
+  const [status, setStatus] = useState('');
+  const [role, setRole] = useState('');
+  const [sort, setSort] = useState('createdAt,desc');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(10);
+  const [version, setVersion] = useState(0);
+  const [resultData, setData] = useState(null);
+  const data = resultData?.section === tab ? resultData : null;
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [comment, setComment] = useState('');
+  const [decision, setDecision] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [actionError, setActionError] = useState('');
   useEffect(() => {
-    if (tab === 'recipes' || tab === 'storage') return;
-    let active = true; setData(null); setError('');
-    const request = tab === 'reports' ? api.adminReports({ page, status: status || undefined, search })
-      : tab === 'users' ? api.adminUsers({ page, status, search }) : api.adminAudit({ page, action: status || undefined });
-    request.then(result => { if (active) setData(result); }).catch(err => { if (active) setError(errorText(err)); });
-    return () => { active = false; };
-  }, [tab, status, search, page, version]);
-  async function act(action) {
-    if (!window.confirm('Подтвердить административное действие?')) return;
-    setBusy(true); setError('');
-    try { await action(); notify('Решение сохранено'); setVersion(v => v + 1); }
-    catch (err) { setError(errorText(err)); } finally { setBusy(false); }
+    setStatus('');
+    setRole('');
+    setSearch('');
+    setSort(tab === 'users' ? 'registeredAt,desc' : 'createdAt,desc');
+    setPage(0);
+    setSelected(null);
+  }, [tab]);
+  useEffect(() => {
+    if (!['reports', 'users', 'audit'].includes(tab)) return;
+    let active = true;
+    setLoading(true);
+    setError('');
+    setData(null);
+    const timer = setTimeout(() => {
+      const request =
+        tab === 'reports'
+          ? api.adminReports({
+              page,
+              size,
+              status: status || undefined,
+              search,
+              sort: ['createdAt', 'id', 'status', 'recipeTitle'].includes(sort.split(',')[0]) ? sort : 'createdAt,desc',
+            })
+          : tab === 'users'
+            ? api.adminUsers({
+                page,
+                size,
+                status,
+                search,
+                role,
+                sort: ['registeredAt', 'name', 'email', 'status', 'role'].includes(sort.split(',')[0]) ? sort : 'registeredAt,desc',
+              })
+            : api.adminAudit({ page, size, action: status || undefined });
+      request
+        .then((result) => {
+          if (active) {
+            setData({ ...result, section: tab });
+            if (page && page >= result.totalPages) setPage(Math.max(0, result.totalPages - 1));
+          }
+        })
+        .catch((err) => {
+          if (active) setError(errorText(err));
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [tab, status, role, sort, search, page, size, version]);
+  function changeTab(key) {
+    setData(null);
+    setLoading(true);
+    setSelected(null);
+    setParams({ section: key });
   }
-  const filters = tab === 'reports' ? reportStatuses : tab === 'users' ? { ACTIVE: 'Активные', BLOCKED: 'Заблокированные', LEGACY: 'Legacy' }
-    : { USER_BLOCKED: 'Блокировки', USER_UNBLOCKED: 'Разблокировки', REPORT_IN_REVIEW: 'Жалобы в работе', REPORT_RESOLVED: 'Закрытие жалоб', REPORT_REJECTED: 'Отклонение жалоб', RECIPE_APPROVED: 'Одобрение рецептов', RECIPE_REJECTED: 'Отклонение рецептов' };
-  return <div className="container moderation-page"><h1>Управление сообществом</h1>
-    <nav className="profile-tabs" aria-label="Разделы управления">{Object.entries({ recipes: 'Рецепты', reports: 'Жалобы', users: 'Пользователи', audit: 'Аудит', storage: 'Хранилище' }).map(([key, name]) => <button className="btn btn-outline" key={key} onClick={() => { setTab(key); setStatus(''); setSearch(''); setPage(0); }}>{name}</button>)}</nav>
-    {tab === 'recipes' ? <ModerationPage/> : tab === 'storage' ? <MediaMaintenance/> : <>
-      <div className="catalog-toolbar"><label>Фильтр статуса<select aria-label="Фильтр статуса" value={status} onChange={e => { setStatus(e.target.value); setPage(0); }}><option value="">Все</option>{Object.entries(filters).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
-        {tab !== 'audit' && <label>Поиск<input aria-label="Административный поиск" value={search} maxLength={100} onChange={e => { setSearch(e.target.value); setPage(0); }}/></label>}</div>
-      {error && <p role="alert" className="error-box">{error}</p>}{!data && !error && <p role="status">Загрузка…</p>}
-      {data?.content.length === 0 && <p>Записей не найдено</p>}
-      {data?.content.map(item => <article className="editor-card" key={item.id}>
-        {tab === 'reports' ? <><h2><Link to={`/recipes/${item.recipeId}`}>{item.recipeTitle}</Link></h2><p>{item.reporterName} · {reasons[item.reason]} · {reportStatuses[item.status]}</p>
-          <details><summary>Подробности жалобы #{item.id}</summary><p>{item.description}</p><p>{item.moderatorComment}</p><small>Администратор: {item.moderatorId || '—'} · {item.reviewedAt || 'Ожидает решения'}</small></details>
-          {['OPEN', 'IN_REVIEW'].includes(item.status) && <><label>Комментарий к жалобе #{item.id}<textarea aria-label={`Комментарий к жалобе ${item.id}`} maxLength={1000} value={comments[item.id] || ''} onChange={e => setComments({ ...comments, [item.id]: e.target.value })}/></label>
-          <div>{Object.entries({ IN_REVIEW: 'В работу', RESOLVED: 'Закрыть жалобу', REJECTED: 'Отклонить жалобу' }).filter(([key]) => key !== item.status).map(([value, name]) => <button className="btn btn-outline" key={value} disabled={busy || (comments[item.id] || '').trim().length < 3} onClick={() => act(() => api.reportDecision(item.id, { status: value, comment: comments[item.id].trim() }))}>{name}</button>)}</div></>}
-        </> : tab === 'users' ? <><h2>{item.name}</h2><p>{item.email || 'Legacy'} · {item.role} · {item.status}</p><p>{item.blockReason} {item.blockedAt && new Date(item.blockedAt).toLocaleString('ru-RU')}</p>
-          {item.status === 'ACTIVE' && <label>Причина блокировки<input aria-label={`Причина блокировки ${item.id}`} maxLength={500} value={comments[item.id] || ''} onChange={e => setComments({ ...comments, [item.id]: e.target.value })}/></label>}
-          {item.status !== 'LEGACY' && <button className="btn btn-danger" disabled={busy || item.id === user.id || (item.status === 'ACTIVE' && (comments[item.id] || '').trim().length < 3)} onClick={() => act(() => item.status === 'BLOCKED' ? api.unblockUser(item.id) : api.blockUser(item.id, { reason: comments[item.id].trim() }))}>{item.status === 'BLOCKED' ? 'Разблокировать' : 'Заблокировать'}</button>}
-        </> : <><strong>{item.action}</strong><p>Администратор #{item.adminId} · {item.targetType} #{item.targetId}</p><p>{item.details}</p><small>{new Date(item.createdAt).toLocaleString('ru-RU')}</small></>}
-      </article>)}
-      {data && <div className="pagination"><button disabled={!page} onClick={() => setPage(page - 1)}>Назад</button><span>{page + 1} / {Math.max(1, data.totalPages)}</span><button disabled={page + 1 >= data.totalPages} onClick={() => setPage(page + 1)}>Далее</button></div>}
-    </>}
-  </div>;
+  function open(item) {
+    setSelected(item);
+    setComment('');
+    setActionError('');
+    setConfirm(false);
+    setDecision(item.status === 'OPEN' ? 'IN_REVIEW' : 'RESOLVED');
+  }
+  async function act(e) {
+    e.preventDefault();
+    if (!confirm && (tab === 'users' || decision !== 'IN_REVIEW')) {
+      setConfirm(true);
+      return;
+    }
+    setBusy(true);
+    setActionError('');
+    try {
+      if (tab === 'reports') await api.reportDecision(selected.id, { status: decision, comment: comment.trim() });
+      else if (selected.status === 'BLOCKED') await api.unblockUser(selected.id);
+      else await api.blockUser(selected.id, { reason: comment.trim() });
+      notify('Решение сохранено');
+      setSelected(null);
+      setVersion((v) => v + 1);
+    } catch (err) {
+      setActionError(errorText(err));
+      setConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const filters = tab === 'reports' ? reportStatuses : tab === 'users' ? userStatuses : events;
+  const columns =
+    tab === 'reports'
+      ? ['ID', 'Дата', 'Рецепт', 'Автор жалобы', 'Причина', 'Статус', 'Действия']
+      : tab === 'users'
+        ? ['Пользователь', 'Email', 'Роль', 'Статус', 'Регистрация', 'Действия']
+        : ['Дата и время', 'Администратор', 'Действие', 'Объект', 'Подробности'];
+  return (
+    <div className="container admin-page">
+      <header className="page-heading">
+        <div className="eyebrow">Рабочее пространство</div>
+        <h1>Управление сообществом</h1>
+        <p>Проверяйте обращения, управляйте доступом и следите за историей решений</p>
+      </header>
+      <div className="admin-shell">
+        <aside className="admin-sidebar">
+          <nav aria-label="Разделы управления">
+            {Object.entries(sections).map(([key, [name, Icon]]) => (
+              <button key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => changeTab(key)}>
+                {createElement(Icon)}
+                {name}
+              </button>
+            ))}
+          </nav>
+          <p>Все решения фиксируются в журнале аудита</p>
+        </aside>
+        <section className="admin-content" aria-label={sections[tab][0]}>
+          {tab === 'overview' ? (
+            <>
+              <h2>Работа с сообществом</h2>
+              <p>Выберите задачу. Жалобы, модерация рецептов и блокировка аккаунтов — отдельные операции.</p>
+              <div className="admin-overview">
+                {Object.entries(sections)
+                  .filter(([key]) => key !== 'overview')
+                  .map(([key, [name, Icon]]) => (
+                    <button className="overview-link" key={key} onClick={() => changeTab(key)}>
+                      {createElement(Icon)}
+                      <strong>{name}</strong>
+                      <span>
+                        {
+                          {
+                            reports: 'Рассмотрение обращений участников',
+                            users: 'Аккаунты и управление доступом',
+                            audit: 'История административных действий',
+                            recipes: 'Проверка перед публикацией',
+                            storage: 'Безопасное обслуживание изображений',
+                          }[key]
+                        }
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </>
+          ) : tab === 'recipes' ? (
+            <ModerationPage embedded />
+          ) : tab === 'storage' ? (
+            <MediaMaintenance />
+          ) : (
+            <>
+              <div className="table-title">
+                <h2>{sections[tab][0]}</h2>
+                <span className="muted">{tab === 'audit' ? 'Сначала новые события' : 'Поиск и фильтры применяются ко всему списку'}</span>
+              </div>
+              <div className="table-toolbar">
+                {tab !== 'audit' && (
+                  <label className="search-field">
+                    Поиск
+                    <input
+                      type="search"
+                      aria-label="Административный поиск"
+                      placeholder={tab === 'users' ? 'Имя или email' : 'Рецепт, имя или email заявителя'}
+                      value={search}
+                      maxLength={100}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(0);
+                      }}
+                    />
+                  </label>
+                )}
+                <label>
+                  {tab === 'audit' ? 'Тип события' : 'Статус'}
+                  <select
+                    aria-label="Фильтр статуса"
+                    value={status}
+                    onChange={(e) => {
+                      setStatus(e.target.value);
+                      setPage(0);
+                    }}
+                  >
+                    <option value="">Все</option>
+                    {Object.entries(filters).map(([key, name]) => (
+                      <option key={key} value={key}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {tab === 'users' && (
+                  <label>
+                    Роль
+                    <select
+                      aria-label="Роль"
+                      value={role}
+                      onChange={(e) => {
+                        setRole(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      <option value="">Все роли</option>
+                      {Object.entries(roles).map(([key, name]) => (
+                        <option key={key} value={key}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {tab !== 'audit' && (
+                  <label>
+                    Сортировка
+                    <select
+                      aria-label="Сортировка"
+                      value={sort}
+                      onChange={(e) => {
+                        setSort(e.target.value);
+                        setPage(0);
+                      }}
+                    >
+                      {Object.entries(
+                        tab === 'users'
+                          ? {
+                              'registeredAt,desc': 'Сначала новые',
+                              'registeredAt,asc': 'Сначала старые',
+                              'name,asc': 'Имя А–Я',
+                              'email,asc': 'Email А–Я',
+                            }
+                          : {
+                              'createdAt,desc': 'Сначала новые',
+                              'createdAt,asc': 'Сначала старые',
+                              'recipeTitle,asc': 'Рецепт А–Я',
+                              'status,asc': 'По статусу',
+                            },
+                      ).map(([key, text]) => (
+                        <option key={key} value={key}>
+                          {text}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              {error && (
+                <div className="error-box" role="alert">
+                  <p>{error}</p>
+                  <button className="btn btn-outline" onClick={() => setVersion((v) => v + 1)}>
+                    Повторить загрузку
+                  </button>
+                </div>
+              )}
+              <DataTable columns={columns} loading={loading} empty={!error && !data?.content.length}>
+                {data?.content.map((item) => (
+                  <tr key={item.id}>
+                    {tab === 'reports' ? (
+                      <>
+                        <td className="numeric">#{item.id}</td>
+                        <td className="nowrap">{date(item.createdAt)}</td>
+                        <td>
+                          <Link className="table-link" to={`/recipes/${item.recipeId}`}>
+                            {item.recipeTitle}
+                            <ExternalLink />
+                          </Link>
+                        </td>
+                        <td>
+                          {item.reporterName}
+                          <small>Участник #{item.reporterId}</small>
+                        </td>
+                        <td>{reasons[item.reason]}</td>
+                        <td>
+                          <StatusBadge value={item.status} labels={reportStatuses} />
+                        </td>
+                        <td>
+                          <button className="btn btn-outline btn-sm" onClick={() => open(item)}>
+                            {['OPEN', 'IN_REVIEW'].includes(item.status) ? 'Рассмотреть' : 'Подробнее'}
+                          </button>
+                        </td>
+                      </>
+                    ) : tab === 'users' ? (
+                      <>
+                        <td>
+                          <div className="table-person">
+                            <Avatar user={item} />
+                            <strong>{item.name}</strong>
+                          </div>
+                        </td>
+                        <td>{item.email || 'Адрес не задан'}</td>
+                        <td>{roles[item.role]}</td>
+                        <td>
+                          <StatusBadge value={item.status} labels={userStatuses} />
+                        </td>
+                        <td className="nowrap">{date(item.registeredAt)}</td>
+                        <td>
+                          {item.status === 'LEGACY' ? (
+                            <span className="muted">Вход недоступен</span>
+                          ) : (
+                            <button
+                              className={`btn btn-sm ${item.status === 'BLOCKED' ? 'btn-outline' : 'btn-danger'}`}
+                              disabled={item.id === user.id || user.role !== 'ADMIN'}
+                              title={item.id === user.id ? 'Нельзя изменить доступ к своему аккаунту' : undefined}
+                              onClick={() => open(item)}
+                            >
+                              {item.status === 'BLOCKED' ? 'Разблокировать' : 'Заблокировать'}
+                            </button>
+                          )}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="nowrap">{date(item.createdAt)}</td>
+                        <td>{item.adminName || `Администратор #${item.adminId}`}</td>
+                        <td>
+                          <span className={`event-label event-${item.action.split('_')[0].toLowerCase()}`}>
+                            {events[item.action] || 'Административное действие'}
+                          </span>
+                        </td>
+                        <td>
+                          {targets[item.targetType] || 'Объект'} #{item.targetId}
+                        </td>
+                        <td>
+                          <button className="btn btn-text" onClick={() => open(item)}>
+                            Подробности
+                          </button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </DataTable>
+              <TablePagination
+                data={data}
+                page={page}
+                size={size}
+                onPage={setPage}
+                onSize={(value) => {
+                  setSize(value);
+                  setPage(0);
+                }}
+                loading={loading}
+              />
+            </>
+          )}
+        </section>
+      </div>
+      {selected && (
+        <Modal
+          title={
+            tab === 'reports'
+              ? `Жалоба #${selected.id}`
+              : tab === 'users'
+                ? selected.status === 'BLOCKED'
+                  ? 'Восстановить доступ'
+                  : 'Заблокировать пользователя'
+                : events[selected.action] || 'Подробности события'
+          }
+          onClose={() => setSelected(null)}
+          busy={busy}
+          wide={tab === 'reports'}
+        >
+          {tab === 'audit' ? (
+            <dl className="detail-list">
+              <dt>Дата и время</dt>
+              <dd>{date(selected.createdAt)}</dd>
+              <dt>Администратор</dt>
+              <dd>{selected.adminName || `#${selected.adminId}`}</dd>
+              <dt>Объект</dt>
+              <dd>
+                {targets[selected.targetType]} #{selected.targetId}
+              </dd>
+              <dt>Подробности</dt>
+              <dd>{detail(selected)}</dd>
+            </dl>
+          ) : (
+            <>
+              {tab === 'reports' ? (
+                <>
+                  <Link className="table-link" to={`/recipes/${selected.recipeId}`}>
+                    {selected.recipeTitle} <ExternalLink />
+                  </Link>
+                  <ReportRecipeSummary key={selected.recipeId} recipeId={selected.recipeId} />
+                  <dl className="detail-list">
+                    <dt>Заявитель</dt>
+                    <dd>
+                      {selected.reporterName} · #{selected.reporterId}
+                    </dd>
+                    <dt>Дата</dt>
+                    <dd>{date(selected.createdAt)}</dd>
+                    <dt>Причина</dt>
+                    <dd>{reasons[selected.reason]}</dd>
+                    <dt>Описание</dt>
+                    <dd>{selected.description || 'Описание не добавлено'}</dd>
+                    <dt>Статус</dt>
+                    <dd>
+                      <StatusBadge value={selected.status} labels={reportStatuses} />
+                    </dd>
+                    {selected.moderatorComment && (
+                      <>
+                        <dt>Внутренняя заметка</dt>
+                        <dd>{selected.moderatorComment}</dd>
+                      </>
+                    )}
+                  </dl>
+                  <p className="info-note">
+                    Решение по жалобе не меняет статус рецепта и не блокирует автора. Эти действия доступны отдельно.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="table-person">
+                    <Avatar user={selected} />
+                    <div>
+                      <strong>{selected.name}</strong>
+                      <small>{selected.email}</small>
+                    </div>
+                  </div>
+                  <p>
+                    {selected.status === 'BLOCKED'
+                      ? 'Пользователь снова сможет войти в аккаунт. Старые сессии останутся отозванными.'
+                      : 'Вход будет закрыт, все активные сессии будут отозваны. Рецепты пользователя сохранятся.'}
+                  </p>
+                  {selected.blockReason && <p>Причина блокировки: {selected.blockReason}</p>}
+                </>
+              )}
+              {(tab === 'users' || ['OPEN', 'IN_REVIEW'].includes(selected.status)) && (
+                <form onSubmit={act}>
+                  {tab === 'reports' && (
+                    <div className="field">
+                      <label htmlFor="decision">Решение</label>
+                      <select id="decision" disabled={confirm || busy} value={decision} onChange={(e) => setDecision(e.target.value)}>
+                        {Object.entries({ IN_REVIEW: 'Принять в работу', RESOLVED: 'Закрыть жалобу', REJECTED: 'Отклонить жалобу' })
+                          .filter(([key]) => key !== selected.status)
+                          .map(([key, text]) => (
+                            <option key={key} value={key}>
+                              {text}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                  {(tab === 'reports' || selected.status === 'ACTIVE') && (
+                    <div className="field">
+                      <label htmlFor="action-comment">
+                        {tab === 'reports' ? `Комментарий к жалобе ${selected.id}` : `Причина блокировки ${selected.id}`}
+                      </label>
+                      <textarea
+                        id="action-comment"
+                        required
+                        minLength={3}
+                        maxLength={tab === 'reports' ? 1000 : 500}
+                        rows={4}
+                        value={comment}
+                        disabled={confirm || busy}
+                        onChange={(e) => setComment(e.target.value)}
+                      />
+                      <small>
+                        {tab === 'reports' ? 'Внутренняя заметка — заявитель её не увидит' : 'Причина сохранится в журнале аудита'}
+                      </small>
+                    </div>
+                  )}
+                  {confirm && (
+                    <p className="warning-note">
+                      {tab === 'reports'
+                        ? 'После завершения жалобу нельзя вернуть в работу. Подтвердите решение.'
+                        : 'Подтвердите изменение доступа к аккаунту.'}
+                    </p>
+                  )}
+                  {actionError && (
+                    <p className="error-box" role="alert">
+                      {actionError}
+                    </p>
+                  )}
+                  <div className="dialog-actions">
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      disabled={busy}
+                      onClick={() => (confirm ? setConfirm(false) : setSelected(null))}
+                    >
+                      {confirm ? 'Назад' : 'Отмена'}
+                    </button>
+                    <button
+                      disabled={busy}
+                      className={`btn ${tab === 'users' && selected.status === 'ACTIVE' ? 'btn-danger-solid' : 'btn-primary'}`}
+                    >
+                      {busy
+                        ? 'Сохраняем…'
+                        : confirm
+                          ? 'Подтвердить решение'
+                          : tab === 'reports'
+                            ? 'Сохранить решение'
+                            : selected.status === 'BLOCKED'
+                              ? 'Разблокировать'
+                              : 'Заблокировать'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
 }

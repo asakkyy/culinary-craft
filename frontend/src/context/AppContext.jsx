@@ -10,9 +10,19 @@ export function AppProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [dataVersion, setDataVersion] = useState(0);
 
-  useEffect(() => { api.me().then(setUser).catch(() => setUser(null)).finally(() => setAuthLoading(false)); }, []);
   useEffect(() => {
-    const expired = () => { setUser(null); setPickerOpen(true); setDataVersion(v => v + 1); };
+    api
+      .me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false));
+  }, []);
+  useEffect(() => {
+    const expired = () => {
+      setUser(null);
+      setPickerOpen(true);
+      setDataVersion((v) => v + 1);
+    };
     window.addEventListener('cc-session-expired', expired);
     return () => window.removeEventListener('cc-session-expired', expired);
   }, []);
@@ -22,20 +32,75 @@ export function AppProvider({ children }) {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const login = async (data) => { const account = await api.login(data); setUser(account); setPickerOpen(false); setDataVersion(v => v + 1); };
-  const logout = async () => { try { await api.logout(); } catch (error) { if (error.response?.status !== 401) throw error; } setUser(null); setPickerOpen(false); setDataVersion(v => v + 1); };
-  const refreshUser = async () => { setUser(await api.me()); setDataVersion(v => v + 1); };
-  const forgetUser = () => { setUser(null); setDataVersion(v => v + 1); };
+  const login = async (data) => {
+    const account = await api.login(data);
+    setUser(account);
+    setPickerOpen(false);
+    setDataVersion((v) => v + 1);
+  };
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      if (error.response?.status !== 401) throw error;
+    }
+    setUser(null);
+    setPickerOpen(false);
+    setDataVersion((v) => v + 1);
+  };
+  const refreshUser = async () => {
+    setUser(await api.me());
+    setDataVersion((v) => v + 1);
+  };
+  const forgetUser = () => {
+    setUser(null);
+    setDataVersion((v) => v + 1);
+  };
   const notify = (message, type = 'success') => setToast({ message, type });
-  const showError = (error) => { if (error.response?.status === 401) { setUser(null); setPickerOpen(true); } notify(errorText(error), 'error'); };
+  const showError = (error) => {
+    if (error.response?.status === 401) {
+      setUser(null);
+      setPickerOpen(true);
+    }
+    notify(errorText(error), 'error');
+  };
   const changed = () => setDataVersion((count) => count + 1);
-  const requireUser = () => { if (!user) { setPickerOpen(true); return false; } return true; };
+  const requireUser = () => {
+    if (!user) {
+      setPickerOpen(true);
+      return false;
+    }
+    if (user.emailVerified === false) {
+      notify('Подтвердите email перед изменением контента. Ссылка находится вверху страницы.', 'error');
+      return false;
+    }
+    return true;
+  };
 
   return (
-    <Context.Provider value={{ refreshUser, forgetUser, user, authLoading, login, logout, pickerOpen, setPickerOpen, toast, notify, showError, changed, dataVersion, requireUser }}>
+    <Context.Provider
+      value={{
+        refreshUser,
+        forgetUser,
+        user,
+        authLoading,
+        login,
+        logout,
+        pickerOpen,
+        setPickerOpen,
+        toast,
+        notify,
+        showError,
+        changed,
+        dataVersion,
+        requireUser,
+      }}
+    >
       {children}
     </Context.Provider>
   );
 }
 
-export function useApp() { return useContext(Context); }
+export function useApp() {
+  return useContext(Context);
+}

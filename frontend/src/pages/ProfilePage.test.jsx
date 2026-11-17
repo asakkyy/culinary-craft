@@ -26,8 +26,8 @@ it('открывает сохранённые рецепты в избранно
   expect(await screen.findByText('Тестовый домашний суп')).toBeInTheDocument();
 });
 
-it('просит гостя выбрать демо-пользователя', () => {
+it('предлагает гостю войти в свою книгу рецептов', () => {
   useApp.mockReturnValue({ user: null, setPickerOpen: vi.fn() });
   renderPage(<ProfilePage />);
-  expect(screen.getByRole('heading', { name: 'Добро пожаловать!' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Ваша книга рецептов' })).toBeInTheDocument();
 });
