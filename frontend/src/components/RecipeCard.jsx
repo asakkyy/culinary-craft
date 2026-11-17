@@ -39,15 +39,15 @@ export default function RecipeCard({ recipe, onChanged }) {
         disabled={busy}
         aria-label="Избранное"
       >
-        <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
+        <Heart size={19} fill={saved ? 'currentColor' : 'none'} aria-hidden="true" />
       </button>
       <div className="recipe-card-body">
         <div className="recipe-card-meta">
           <span>
-            <Clock3 size={14} /> {recipe.prepMinutes} мин
+            <Clock3 size={14} aria-hidden="true" /> {recipe.prepMinutes} мин
           </span>
           <span>
-            <Star size={14} fill="currentColor" /> {recipe.reviewCount ? recipe.rating.toFixed(1) : 'Новинка'}
+            <Star size={14} fill="currentColor" aria-hidden="true" /> {recipe.reviewCount ? recipe.rating.toFixed(1) : 'Новинка'}
           </span>
         </div>
         <Link to={`/recipes/${recipe.id}`} className="recipe-title-link">
@@ -57,7 +57,7 @@ export default function RecipeCard({ recipe, onChanged }) {
         <div className="card-bottom">
           <span>от {recipe.ownerName}</span>
           <Link to={`/recipes/${recipe.id}`} aria-label="Подробнее">
-            <ArrowUpRight size={19} />
+            <ArrowUpRight size={19} aria-hidden="true" />
           </Link>
         </div>
       </div>

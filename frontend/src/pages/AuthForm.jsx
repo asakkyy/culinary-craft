@@ -1,3 +1,4 @@
+import FormError from '../components/FormError';
 import { useState } from 'react';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
@@ -49,25 +50,31 @@ export default function AuthForm({ register = false }) {
           Для публикации подтвердите email. <Link to="/resend-verification">Отправить письмо</Link>
         </p>
       )}
-      {error && (
-        <p className="error-box" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <FormError>{error}</FormError>}
       <form onSubmit={submit}>
         {!user && (
           <>
             {signup && (
               <div className="field">
                 <label htmlFor="auth-name">Имя</label>
-                <input id="auth-name" required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+                <input
+                  id="auth-name"
+                  name="auth-name"
+                  required
+                  minLength={2}
+                  maxLength={80}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
             )}
             <div className="field">
               <label htmlFor="auth-email">Email</label>
               <input
                 id="auth-email"
+                name="auth-email"
                 type="email"
+                spellCheck={false}
                 autoComplete="username"
                 required
                 maxLength={254}
@@ -79,6 +86,7 @@ export default function AuthForm({ register = false }) {
               <label htmlFor="auth-password">Пароль</label>
               <input
                 id="auth-password"
+                name="auth-password"
                 type="password"
                 autoComplete={signup ? 'new-password' : 'current-password'}
                 required

@@ -15,6 +15,9 @@ export default function RecipePage() {
   const { user, dataVersion, requireUser, notify, showError, changed } = useApp();
   const [recipe, setRecipe] = useState(null);
   const [reviews, setReviews] = useState([]);
+  const [reviewsError, setReviewsError] = useState('');
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
   const [checked, setChecked] = useState([]);
   const [rating, setRating] = useState(5);
@@ -31,6 +34,9 @@ export default function RecipePage() {
   }, [id]);
   useEffect(() => {
     let active = true;
+    setError('');
+    setReviewsError('');
+    setReviewsLoading(true);
     api
       .one(id)
       .then((result) => {
@@ -44,11 +50,16 @@ export default function RecipePage() {
       .then((list) => {
         if (active) setReviews(list);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (active) setReviewsError(errorText(err));
+      })
+      .finally(() => {
+        if (active) setReviewsLoading(false);
+      });
     return () => {
       active = false;
     };
-  }, [id, dataVersion]);
+  }, [id, dataVersion, retry]);
 
   async function favorite() {
     if (!requireUser()) return;
@@ -93,9 +104,12 @@ export default function RecipePage() {
   if (error)
     return (
       <div className="container narrow-page">
-        <div className="error-box">
-          <h2>Рецепт недоступен</h2>
+        <div className="error-box" role="alert">
+          <h1>Рецепт недоступен</h1>
           <p>{error}</p>
+          <button className="btn btn-outline" onClick={() => setRetry((value) => value + 1)}>
+            Повторить загрузку
+          </button>
           <Link to="/" className="btn btn-primary">
             Вернуться в каталог
           </Link>
@@ -105,7 +119,9 @@ export default function RecipePage() {
   if (!recipe)
     return (
       <div className="container narrow-page">
-        <div className="loading-message">Готовим страницу рецепта…</div>
+        <div className="loading-message" role="status">
+          Готовим страницу рецепта…
+        </div>
       </div>
     );
   const mine = user && (user.id === recipe.ownerId || user.role === 'ADMIN');
@@ -114,7 +130,7 @@ export default function RecipePage() {
     <div className="container detail-page">
       <div className="breadcrumbs">
         <Link to="/">
-          <ArrowLeft size={17} /> Все рецепты
+          <ArrowLeft size={17} aria-hidden="true" /> Все рецепты
         </Link>
         <span>/</span>
         <span>{recipe.category}</span>
@@ -130,13 +146,14 @@ export default function RecipePage() {
           <p>{recipe.description}</p>
           <div className="detail-quick-meta">
             <span>
-              <Clock3 size={18} /> {recipe.prepMinutes} минут
+              <Clock3 size={18} aria-hidden="true" /> {recipe.prepMinutes} минут
             </span>
             <span>
-              <UsersRound size={18} /> {recipe.servings} порции
+              <UsersRound size={18} aria-hidden="true" /> {recipe.servings} порции
             </span>
             <span>
-              <Star size={18} fill="currentColor" /> {recipe.reviewCount ? `${recipe.rating} (${recipe.reviewCount})` : 'Без оценок'}
+              <Star size={18} fill="currentColor" aria-hidden="true" />{' '}
+              {recipe.reviewCount ? `${recipe.rating} (${recipe.reviewCount})` : 'Без оценок'}
             </span>
             <span className="difficulty">{recipe.difficulty}</span>
           </div>
@@ -148,11 +165,11 @@ export default function RecipePage() {
             disabled={recipe.status !== 'APPROVED'}
             title={recipe.status !== 'APPROVED' ? 'Избранное доступно после публикации' : undefined}
           >
-            <Heart size={18} fill={recipe.favorite ? 'currentColor' : 'none'} />
+            <Heart size={18} fill={recipe.favorite ? 'currentColor' : 'none'} aria-hidden="true" />
             {recipe.favorite ? 'В избранном' : 'Сохранить'}
           </button>
           <button className="btn btn-outline print-btn" onClick={() => window.print()}>
-            <Printer size={18} /> Печать
+            <Printer size={18} aria-hidden="true" /> Печать
           </button>
         </div>
       </div>
@@ -177,7 +194,7 @@ export default function RecipePage() {
                   onChange={() => setChecked((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]))}
                 />
                 <span className="ingredient-check">
-                  <Check size={13} />
+                  <Check size={13} aria-hidden="true" />
                 </span>
                 {ingredient}
               </label>
@@ -209,7 +226,7 @@ export default function RecipePage() {
           {mine && (
             <div className="owner-actions">
               <Link className="btn btn-outline" to={`/recipes/${recipe.id}/edit`}>
-                <Pencil size={16} /> Редактировать
+                <Pencil size={16} aria-hidden="true" /> Редактировать
               </Link>
               <button className="btn btn-danger" onClick={() => setDeleting(true)}>
                 Удалить рецепт
@@ -241,7 +258,17 @@ export default function RecipePage() {
         </div>
         <div className="reviews-layout">
           <div className="reviews-list">
-            {reviews.length ? (
+            {reviewsLoading ? (
+              <p role="status">Загружаем отзывы…</p>
+            ) : reviewsError ? (
+              <div className="error-box" role="alert">
+                <p>Не удалось загрузить отзывы</p>
+                <p>{reviewsError}</p>
+                <button className="btn btn-outline" onClick={() => setRetry((value) => value + 1)}>
+                  Повторить загрузку отзывов
+                </button>
+              </div>
+            ) : reviews.length ? (
               reviews.map((review) => (
                 <article className="review-card" key={review.id}>
                   <div className="review-person">
@@ -265,24 +292,27 @@ export default function RecipePage() {
           <div className="review-form-panel">
             <h3>Уже приготовил?</h3>
             <p>Расскажите, как получилось. Ваш отзыв поможет другим.</p>
-            {!user ? (
+            {reviewsLoading || reviewsError ? (
+              <p>Форма отзыва станет доступна после загрузки списка</p>
+            ) : !user ? (
               <button className="btn btn-primary" onClick={requireUser}>
                 Войти, чтобы оставить отзыв
               </button>
             ) : hasReviewed ? (
               <div className="already-reviewed">
-                <Check size={18} /> Ты уже оценил этот рецепт
+                <Check size={18} aria-hidden="true" /> Ты уже оценил этот рецепт
               </div>
             ) : recipe.status === 'APPROVED' ? (
               <form onSubmit={addReview}>
                 <label>Твоя оценка</label>
-                <div className="rating-input">
+                <div className="rating-input" role="group" aria-label="Твоя оценка">
                   {Array.from({ length: 5 }, (_, i) => (
                     <button
                       type="button"
                       key={i}
                       onClick={() => setRating(i + 1)}
                       aria-label={`Оценка ${i + 1}`}
+                      aria-pressed={rating === i + 1}
                       className={i < rating ? 'active' : ''}
                     >
                       ★
@@ -301,7 +331,7 @@ export default function RecipePage() {
                   rows="4"
                 />
                 <button className="btn btn-primary" disabled={sending} type="submit">
-                  Опубликовать <Send size={16} />
+                  Опубликовать <Send size={16} aria-hidden="true" />
                 </button>
               </form>
             ) : (

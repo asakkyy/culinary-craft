@@ -1,5 +1,5 @@
 import { beforeEach, it, expect, vi } from 'vitest';
-import { screen, within, waitFor } from '@testing-library/react';
+import { screen, within, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AdminPage from './AdminPage';
 import ReportsPage from './ReportsPage';
@@ -97,7 +97,7 @@ it('сохраняет решение только после подтвержд
 it('требует причину и подтверждение перед блокировкой', async () => {
   renderPage(<AdminPage />);
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: 'Пользователи' }));
+  await user.click(screen.getByRole('link', { name: 'Пользователи' }));
   await user.click(await screen.findByRole('button', { name: 'Заблокировать' }));
   await user.type(screen.getByLabelText('Причина блокировки 10'), 'Нарушение правил');
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Заблокировать' }));
@@ -121,7 +121,7 @@ it('показывает понятные события аудита и под�
   renderPage(<AdminPage />);
   const user = userEvent.setup();
   await screen.findByRole('button', { name: 'Рассмотреть' });
-  await user.click(screen.getByRole('button', { name: 'Аудит' }));
+  await user.click(screen.getByRole('link', { name: 'Аудит' }));
   expect(await screen.findByText('Модератор')).toBeInTheDocument();
   expect(within(screen.getByRole('table')).getByText('Жалоба закрыта')).toBeInTheDocument();
   expect(screen.queryByText('REPORT_RESOLVED')).not.toBeInTheDocument();
@@ -137,6 +137,32 @@ it('показывает ошибки загрузки и безопасно з�
     total: 1,
     totalPages: 1,
   });
-  await userEvent.click(screen.getByRole('button', { name: 'Пользователи' }));
+  await userEvent.click(screen.getByRole('link', { name: 'Пользователи' }));
   expect(await screen.findByRole('button', { name: 'Заблокировать' })).toBeDisabled();
+});
+it('восстанавливает фильтры, страницу и размер из прямой ссылки', async () => {
+  api.adminUsers.mockResolvedValue({ content: [], total: 55, totalPages: 3 });
+  renderPage(<AdminPage />, '/admin?section=users&search=Автор&role=USER&status=ACTIVE&sort=name,asc&page=1&size=20');
+  expect(screen.getByRole('searchbox')).toHaveValue('Автор');
+  await waitFor(() =>
+    expect(api.adminUsers).toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'Автор', role: 'USER', status: 'ACTIVE', sort: 'name,asc', page: 1, size: 20 }),
+    ),
+  );
+});
+it('не возвращает строки из опоздавшего ответа после смены фильтра', async () => {
+  let resolve;
+  api.adminReports.mockReturnValueOnce(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  renderPage(<AdminPage />);
+  await waitFor(() => expect(api.adminReports).toHaveBeenCalledTimes(1));
+  api.adminReports.mockResolvedValue({ content: [{ ...report, id: 99 }], total: 1, totalPages: 1 });
+  await userEvent.selectOptions(screen.getByLabelText('Фильтр статуса'), 'OPEN');
+  await screen.findByText('#99');
+  await act(async () => resolve({ content: [report], total: 1, totalPages: 1 }));
+  expect(screen.getByText('#99')).toBeInTheDocument();
+  expect(screen.queryByText('#7')).not.toBeInTheDocument();
 });

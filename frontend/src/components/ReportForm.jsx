@@ -1,3 +1,4 @@
+import FormError from '../components/FormError';
 import { useState } from 'react';
 import { Flag } from 'lucide-react';
 import { api, errorText } from '../api/client';
@@ -27,7 +28,7 @@ export default function ReportForm({ recipeId }) {
           if (requireUser()) setOpen(true);
         }}
       >
-        <Flag /> Пожаловаться
+        <Flag aria-hidden="true" /> Пожаловаться
       </button>
       {open && (
         <Modal title={sent ? 'Жалоба отправлена' : 'Пожаловаться на рецепт'} onClose={() => setOpen(false)} busy={busy}>
@@ -59,7 +60,7 @@ export default function ReportForm({ recipeId }) {
               <p>Сообщите о нарушении правил. Отправка жалобы не снимает рецепт с публикации — решение принимает модератор.</p>
               <div className="field">
                 <label htmlFor="report-reason">Причина жалобы</label>
-                <select id="report-reason" value={reason} onChange={(e) => setReason(e.target.value)}>
+                <select id="report-reason" name="reason" required value={reason} onChange={(e) => setReason(e.target.value)}>
                   {Object.entries(reasons).map(([key, text]) => (
                     <option key={key} value={key}>
                       {text}
@@ -71,6 +72,7 @@ export default function ReportForm({ recipeId }) {
                 <label htmlFor="report-description">Описание жалобы</label>
                 <textarea
                   id="report-description"
+                  name="report-description"
                   minLength={10}
                   maxLength={1000}
                   rows={5}
@@ -80,11 +82,7 @@ export default function ReportForm({ recipeId }) {
                 />
                 <small id="report-count">Необязательно · {description.length} / 1000 · Минимум 10 символов, если заполняете</small>
               </div>
-              {error && (
-                <p className="error-box" role="alert">
-                  {error}
-                </p>
-              )}
+              {error && <FormError>{error}</FormError>}
               <div className="dialog-actions">
                 <button type="button" className="btn btn-outline" disabled={busy} onClick={() => setOpen(false)}>
                   Отмена

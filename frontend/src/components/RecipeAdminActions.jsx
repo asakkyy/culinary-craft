@@ -44,7 +44,7 @@ export default function RecipeAdminActions({ recipe }) {
   return (
     <section className="recipe-admin-panel">
       <h2>
-        <ShieldCheck /> Модерация рецепта
+        <ShieldCheck aria-hidden="true" /> Модерация рецепта
       </h2>
       <p>
         {recipe.status === 'PENDING'

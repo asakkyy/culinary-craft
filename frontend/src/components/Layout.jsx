@@ -29,11 +29,26 @@ export default function Layout({ children }) {
   const [busy, setBusy] = useState(false);
   const account = useRef(null);
   const trigger = useRef(null);
+  const mobileTrigger = useRef(null);
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    else window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [location.pathname, location.hash]);
+  useEffect(() => {
     setAccountOpen(false);
     setMobileOpen(false);
   }, [location.pathname, location.search]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const close = (event) => {
+      if (event.key === 'Escape') {
+        setMobileOpen(false);
+        mobileTrigger.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [mobileOpen]);
   useEffect(() => {
     if (!accountOpen) return;
     account.current?.querySelector('[role="menuitem"]')?.focus();
@@ -60,49 +75,61 @@ export default function Layout({ children }) {
         e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
       ]?.focus();
     }
-    if (e.key === 'Tab') setAccountOpen(false);
+    if (e.key === 'Tab') {
+      trigger.current?.focus();
+      setAccountOpen(false);
+    }
   }
   return (
-    <div className="site-shell">
+    <div
+      className="site-shell"
+      onClickCapture={(event) => {
+        // WebKit does not focus buttons on pointer activation. Keep dialog openers
+        // in the focus history before their click handler mounts a modal.
+        const button = event.target.closest?.('button');
+        if (button && !button.disabled) button.focus({ preventScroll: true });
+      }}
+    >
       <a href="#main-content" className="skip-link">
         К содержимому
       </a>
       <header className="site-header">
         <div className="container header-inner">
           <Link to="/" className="brand" aria-label="Culinary Craft — главная">
-            <ChefHat strokeWidth={1.5} />
+            <ChefHat strokeWidth={1.5} aria-hidden="true" />
             <span>
               Culinary Craft<small>Книга домашней кухни</small>
             </span>
           </Link>
           <button
+            ref={mobileTrigger}
             className="icon-button mobile-menu-toggle"
             aria-label="Основное меню"
             aria-controls="main-nav"
             aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => setMobileOpen((open) => !open)}
           >
-            {mobileOpen ? <X /> : <Menu />}
+            {mobileOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           </button>
           <nav id="main-nav" className={`main-nav ${mobileOpen ? 'is-open' : ''}`} aria-label="Основная навигация">
             <NavLink to="/" end>
               Рецепты
             </NavLink>
             <NavLink to="/favorites">
-              <Heart /> Избранное
+              <Heart aria-hidden="true" /> Избранное
             </NavLink>
             <NavLink to="/profile">
-              <BookOpen /> Моя кухня
+              <BookOpen aria-hidden="true" /> Моя кухня
             </NavLink>
             {user?.role === 'ADMIN' && (
               <NavLink to="/admin">
-                <ShieldCheck /> Управление
+                <ShieldCheck aria-hidden="true" /> Управление
               </NavLink>
             )}
           </nav>
           <div className="header-actions">
             <button className="btn btn-primary nav-create" onClick={() => (user ? navigate('/create') : setPickerOpen(true))}>
-              <Plus /> Добавить рецепт
+              <Plus aria-hidden="true" /> Добавить рецепт
             </button>
             {user ? (
               <div className="account" ref={account} onKeyDown={menuKeys}>
@@ -124,7 +151,7 @@ export default function Layout({ children }) {
                 >
                   <Avatar user={user} />
                   <span className="user-chip-name">{user.name.split(' ')[0]}</span>
-                  <ChevronDown />
+                  <ChevronDown aria-hidden="true" />
                 </button>
                 {accountOpen && (
                   <div id="account-menu" role="menu" aria-label="Аккаунт" className="account-menu">
@@ -133,14 +160,14 @@ export default function Layout({ children }) {
                       <small>{user.email}</small>
                     </div>
                     <Link role="menuitem" to="/profile">
-                      <UserRound /> Мой профиль
+                      <UserRound aria-hidden="true" /> Мой профиль
                     </Link>
                     <Link role="menuitem" to="/settings">
-                      <Settings /> Настройки
+                      <Settings aria-hidden="true" /> Настройки
                     </Link>
                     {user.role === 'ADMIN' && (
                       <Link role="menuitem" to="/admin">
-                        <ShieldCheck /> Администрирование
+                        <ShieldCheck aria-hidden="true" /> Администрирование
                       </Link>
                     )}
                     <hr />
@@ -160,7 +187,7 @@ export default function Layout({ children }) {
                         }
                       }}
                     >
-                      <LogOut /> {busy ? 'Выходим…' : 'Выйти'}
+                      <LogOut aria-hidden="true" /> {busy ? 'Выходим…' : 'Выйти'}
                     </button>
                   </div>
                 )}
@@ -191,7 +218,7 @@ export default function Layout({ children }) {
         <div className="container footer-inner">
           <div>
             <Link to="/" className="footer-brand">
-              <ChefHat /> Culinary Craft
+              <ChefHat aria-hidden="true" /> Culinary Craft
             </Link>
             <p>Рецепты, которые хочется повторить</p>
           </div>
@@ -209,7 +236,7 @@ export default function Layout({ children }) {
       </footer>
       {toast && (
         <div className={`toast toast-${toast.type}`} role="status">
-          {toast.type === 'error' ? <AlertCircle /> : <CheckCircle2 />}
+          {toast.type === 'error' ? <AlertCircle aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
           {toast.message}
         </div>
       )}

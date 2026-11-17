@@ -66,18 +66,43 @@ it('не отправляет письмо при открытии, отправ
   expect(api.requestVerification).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: 'Отправить письмо' })).toBeDisabled();
 });
-it('перенаправляет подтверждённый аккаунт из обоих экранов подтверждения', () => {
+it.each(['resend', 'verify'])('перенаправляет подтверждённый аккаунт из экрана %s', (mode) => {
   useApp.mockReturnValue({ user: { emailVerified: true } });
   render(
     <MemoryRouter initialEntries={['/resend-verification']}>
       <Routes>
-        <Route path="/resend-verification" element={<RecoveryPage mode="resend" />} />
+        <Route path="/resend-verification" element={<RecoveryPage mode={mode} />} />
         <Route path="/profile" element={<h1>Профиль</h1>} />
       </Routes>
     </MemoryRouter>,
   );
   expect(screen.getByRole('heading', { name: 'Профиль' })).toBeInTheDocument();
   expect(api.requestVerification).not.toHaveBeenCalled();
+});
+it('после ошибки обновления аккаунта не отправляет одноразовый токен повторно', async () => {
+  const refreshUser = vi.fn().mockRejectedValueOnce(new Error('Нет сети')).mockResolvedValue({ emailVerified: true });
+  useApp.mockReturnValue({ user: { emailVerified: false }, refreshUser });
+  window.history.replaceState(null, '', '/verify-email#token=one-use');
+  renderPage(<RecoveryPage mode="verify" />);
+  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить email' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Email подтверждён');
+  await userEvent.click(screen.getByRole('button', { name: 'Обновить аккаунт' }));
+  expect(api.verifyEmail).toHaveBeenCalledTimes(1);
+  expect(refreshUser).toHaveBeenCalledTimes(2);
+});
+it('доступна явная отправка, даже если sessionStorage запрещён браузером', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('Blocked');
+  });
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('Blocked');
+  });
+  api.requestVerification.mockResolvedValue({ message: 'Проверьте почту' });
+  useApp.mockReturnValue({ user: { email: 'author@example.test', emailVerified: false } });
+  renderPage(<RecoveryPage mode="resend" />);
+  await userEvent.click(screen.getByRole('button', { name: 'Отправить письмо' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Проверьте почту');
+  expect(screen.getByRole('button', { name: 'Отправить письмо' })).toBeDisabled();
 });
 it('обновляет аккаунт с сервера и переводит в профиль после подтверждения', async () => {
   const refreshUser = vi.fn().mockResolvedValue();

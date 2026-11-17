@@ -92,10 +92,10 @@ export default function CatalogPage() {
             <p>Проверенные идеи для обычного ужина и особенного случая. Найдите своё блюдо — и сохраните в личную книгу.</p>
             <div className="hero-buttons">
               <a className="btn btn-primary btn-lg" href="#catalog">
-                Найти рецепт <ArrowUpRight />
+                Найти рецепт <ArrowUpRight aria-hidden="true" />
               </a>
               <Link className="btn btn-text" to="/create">
-                Поделиться своим <ArrowRight />
+                Поделиться своим <ArrowRight aria-hidden="true" />
               </Link>
             </div>
             <div className="hero-caption">Готовим, делимся, повторяем</div>
@@ -110,7 +110,7 @@ export default function CatalogPage() {
                   </span>
                   <strong>{featured.title}</strong>
                   <span>
-                    Открыть рецепт <ArrowUpRight />
+                    Открыть рецепт <ArrowUpRight aria-hidden="true" />
                   </span>
                 </div>
               </Link>
@@ -126,10 +126,10 @@ export default function CatalogPage() {
             <BookMark /> Личная книга рецептов
           </span>
           <span>
-            <Clock3 /> Время приготовления в каждой карточке
+            <Clock3 aria-hidden="true" /> Время приготовления в каждой карточке
           </span>
           <span>
-            <ChefHat /> Рецепты от сообщества
+            <ChefHat aria-hidden="true" /> Рецепты от сообщества
           </span>
         </div>
       </section>
@@ -149,7 +149,7 @@ export default function CatalogPage() {
               className={`category-pill ${category === name ? 'active' : ''}`}
               onClick={() => changeParams({ category: name, page: '' })}
             >
-              {createElement(Icon)}
+              {createElement(Icon, { 'aria-hidden': true })}
               {name}
             </button>
           ))}
@@ -162,7 +162,7 @@ export default function CatalogPage() {
               changeParams({ search: input.trim(), page: '' });
             }}
           >
-            <Search />
+            <Search aria-hidden="true" />
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -170,7 +170,7 @@ export default function CatalogPage() {
               aria-label="Поиск рецептов"
             />
             <button type="submit">
-              Найти <ArrowRight />
+              Найти <ArrowRight aria-hidden="true" />
             </button>
           </form>
           <div className="sort-control">
@@ -215,7 +215,7 @@ export default function CatalogPage() {
             </div>
           ) : (
             <div className="empty-state">
-              <Search />
+              <Search aria-hidden="true" />
               <h3>Пока ничего не нашли</h3>
               <p>Попробуйте другую категорию или более короткий запрос</p>
               {!search && category === 'Все рецепты' && (
@@ -262,7 +262,7 @@ export default function CatalogPage() {
               <p>Рецепты с самым коротким временем приготовления в каталоге</p>
             </div>
             <Link className="btn btn-text" to="/?sort=quick#catalog">
-              Все быстрые рецепты <ArrowRight />
+              Все быстрые рецепты <ArrowRight aria-hidden="true" />
             </Link>
           </div>
           <div className="recipe-grid">
@@ -280,7 +280,7 @@ export default function CatalogPage() {
             <p>Сохраните свою — с ингредиентами, фотографией и понятными шагами</p>
           </div>
           <Link className="btn btn-primary" to="/create">
-            Добавить рецепт <ArrowUpRight />
+            Добавить рецепт <ArrowUpRight aria-hidden="true" />
           </Link>
         </div>
       </section>
@@ -288,5 +288,5 @@ export default function CatalogPage() {
   );
 }
 function BookMark() {
-  return <Utensils />;
+  return <Utensils aria-hidden="true" />;
 }

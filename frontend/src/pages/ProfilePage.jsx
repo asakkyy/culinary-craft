@@ -13,6 +13,7 @@ export default function ProfilePage({ view = 'mine' }) {
   const [favorites, setFavorites] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const navigate = useNavigate();
   useEffect(() => {
     if (!user) return;
@@ -35,7 +36,7 @@ export default function ProfilePage({ view = 'mine' }) {
     return () => {
       ok = false;
     };
-  }, [user, dataVersion]);
+  }, [user, dataVersion, retry]);
   if (!user)
     return (
       <div className="container narrow-page">
@@ -63,20 +64,20 @@ export default function ProfilePage({ view = 'mine' }) {
           </p>
         </div>
         <button className="btn btn-light profile-switch" onClick={() => navigate('/settings')}>
-          <Settings2 size={17} /> Настройки аккаунта
+          <Settings2 size={17} aria-hidden="true" /> Настройки аккаунта
         </button>
       </div>
       <div className="profile-stats">
         <div>
-          <strong>{mine.length}</strong>
+          <strong>{loading || error ? '—' : mine.length}</strong>
           <span>Мои рецепты</span>
         </div>
         <div>
-          <strong>{favorites.length}</strong>
+          <strong>{loading || error ? '—' : favorites.length}</strong>
           <span>Избранное</span>
         </div>
         <div>
-          <strong>{mine.filter((r) => r.status === 'APPROVED').length}</strong>
+          <strong>{loading || error ? '—' : mine.filter((r) => r.status === 'APPROVED').length}</strong>
           <span>Опубликовано</span>
         </div>
       </div>
@@ -87,24 +88,35 @@ export default function ProfilePage({ view = 'mine' }) {
             <h2>{view === 'favorites' ? 'Любимые рецепты' : 'Мои рецепты'}</h2>
           </div>
           <button className="btn btn-primary" onClick={() => navigate('/create')}>
-            <Plus size={18} /> Новый рецепт
+            <Plus size={18} aria-hidden="true" /> Новый рецепт
           </button>
         </div>
         <div className="profile-tabs">
           <Link to="/profile" className={view === 'mine' ? 'active' : ''}>
-            <BookOpen size={17} /> Мои рецепты
+            <BookOpen size={17} aria-hidden="true" /> Мои рецепты
           </Link>
           <Link to="/favorites" className={view === 'favorites' ? 'active' : ''}>
-            <Heart size={17} /> Избранное
+            <Heart size={17} aria-hidden="true" /> Избранное
           </Link>
           {user.role === 'ADMIN' && (
             <Link to="/admin?section=recipes">
-              <ShieldCheck size={17} /> Модерация
+              <ShieldCheck size={17} aria-hidden="true" /> Модерация
             </Link>
           )}
         </div>
-        {error && <div className="error-box">{error}</div>}
-        {loading && <div className="loading-message">Загружаем твою кухню…</div>}
+        {error && (
+          <div className="error-box" role="alert">
+            <p>{error}</p>
+            <button className="btn btn-outline" onClick={() => setRetry((value) => value + 1)}>
+              Повторить загрузку
+            </button>
+          </div>
+        )}
+        {loading && (
+          <div className="loading-message" role="status">
+            Загружаем твою кухню…
+          </div>
+        )}
         {!error &&
           !loading &&
           (list.length ? (
@@ -118,7 +130,7 @@ export default function ProfilePage({ view = 'mine' }) {
             </div>
           ) : (
             <div className="empty-state">
-              <BookOpen />
+              <BookOpen aria-hidden="true" />
               <h3>{view === 'mine' ? 'Здесь появятся твои рецепты' : 'Пока ничего не сохранено'}</h3>
               <p>
                 {view === 'mine'
@@ -127,7 +139,7 @@ export default function ProfilePage({ view = 'mine' }) {
               </p>
               <Link className="btn btn-primary" to={view === 'mine' ? '/create' : '/'}>
                 {view === 'mine' ? 'Создать рецепт' : 'Найти рецепты'}
-                <ArrowRight size={17} />
+                <ArrowRight size={17} aria-hidden="true" />
               </Link>
             </div>
           ))}

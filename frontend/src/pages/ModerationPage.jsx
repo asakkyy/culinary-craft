@@ -16,6 +16,7 @@ export default function ModerationPage({ embedded = false }) {
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
     let valid = true;
+    setError('');
     setLoading(true);
     api
       .pending()
@@ -62,13 +63,13 @@ export default function ModerationPage({ embedded = false }) {
       <div className="moderation-header">
         <div>
           <div className="eyebrow muted">
-            <ShieldCheck size={17} /> Проверка контента
+            <ShieldCheck size={17} aria-hidden="true" /> Проверка контента
           </div>
-          <h1>Модерация рецептов</h1>
+          {embedded ? <h2>Модерация рецептов</h2> : <h1>Модерация рецептов</h1>}
           <p>Помогаем сообществу делиться качественными рецептами.</p>
         </div>
         <span className="pending-counter">
-          <Clock3 size={20} />
+          <Clock3 size={20} aria-hidden="true" />
           <strong>{items.length}</strong> ожидают решения
         </span>
       </div>
@@ -103,13 +104,13 @@ export default function ModerationPage({ embedded = false }) {
                 </div>
                 <div className="moderation-actions">
                   <Link className="btn btn-outline" to={`/recipes/${recipe.id}`}>
-                    <Eye size={17} /> Просмотр
+                    <Eye size={17} aria-hidden="true" /> Просмотр
                   </Link>
                   <button disabled={busy === recipe.id} className="btn btn-approve" onClick={() => moderate(recipe.id, 'APPROVED')}>
-                    <Check size={17} /> Одобрить
+                    <Check size={17} aria-hidden="true" /> Одобрить
                   </button>
                   <button disabled={busy === recipe.id} className="btn btn-danger" onClick={() => setRejectId(recipe.id)}>
-                    <X size={17} /> Отклонить
+                    <X size={17} aria-hidden="true" /> Отклонить
                   </button>
                 </div>
               </article>
@@ -117,7 +118,7 @@ export default function ModerationPage({ embedded = false }) {
           </div>
         ) : (
           <div className="empty-state">
-            <Check />
+            <Check aria-hidden="true" />
             <h3>Все рецепты проверены</h3>
             <p>На данный момент заявок больше нет. Можно возвращаться к готовке.</p>
             <Link className="btn btn-primary" to="/">

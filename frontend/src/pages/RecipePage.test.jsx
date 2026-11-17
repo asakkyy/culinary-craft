@@ -7,14 +7,26 @@ import { api } from '../api/client';
 import { useApp } from '../context/AppContext';
 import { anna, recipe } from '../test/testHelpers';
 
-vi.mock('../api/client', () => ({ api: {
-  one: vi.fn(), reviews: vi.fn(), toggleFavorite: vi.fn(), addReview: vi.fn(), remove: vi.fn(),
-}, errorText: (e) => e.message }));
+vi.mock('../api/client', () => ({
+  api: {
+    one: vi.fn(),
+    reviews: vi.fn(),
+    toggleFavorite: vi.fn(),
+    addReview: vi.fn(),
+    remove: vi.fn(),
+  },
+  errorText: (e) => e.message,
+}));
 vi.mock('../context/AppContext', () => ({ useApp: vi.fn() }));
 
-const display = () => render(<MemoryRouter initialEntries={['/recipes/123']}><Routes>
-  <Route path="/recipes/:id" element={<RecipePage />} />
-</Routes></MemoryRouter>);
+const display = () =>
+  render(
+    <MemoryRouter initialEntries={['/recipes/123']}>
+      <Routes>
+        <Route path="/recipes/:id" element={<RecipePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
 
 beforeEach(() => {
   useApp.mockReturnValue({ user: anna, dataVersion: 0, requireUser: () => true, notify: vi.fn(), showError: vi.fn(), changed: vi.fn() });
@@ -48,7 +60,24 @@ it('публикует отзыв и оценку', async () => {
 });
 
 it('скрывает отзыв, если пользователь уже оценивал рецепт', async () => {
-  api.reviews.mockResolvedValue([{ id: 5, authorId: 1, authorName: 'Анна', rating: 5, comment: 'Отлично', createdAt: '2026-01-01T00:00:00Z' }]);
+  api.reviews.mockResolvedValue([
+    { id: 5, authorId: 1, authorName: 'Анна', rating: 5, comment: 'Отлично', createdAt: '2026-01-01T00:00:00Z' },
+  ]);
   display();
   expect(await screen.findByText('Ты уже оценил этот рецепт')).toBeInTheDocument();
+});
+it('не выдаёт ошибку загрузки отзывов за пустой список и позволяет повторить', async () => {
+  api.reviews.mockRejectedValueOnce(new Error('Ошибка сервера'));
+  display();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить отзывы');
+  expect(screen.queryByText(/Пока нет отзывов/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить загрузку отзывов' }));
+  expect(await screen.findByText(/Пока нет отзывов/)).toBeInTheDocument();
+});
+it('позволяет повторить загрузку недоступного рецепта', async () => {
+  api.one.mockRejectedValueOnce(new Error('Сервер временно недоступен'));
+  display();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Сервер временно недоступен');
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить загрузку' }));
+  expect(await screen.findByRole('heading', { name: 'Тестовый домашний суп' })).toBeInTheDocument();
 });

@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { useNavigate } from 'react-router-dom';
 import { screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Layout from './Layout';
@@ -44,9 +45,18 @@ it('открывает настоящее меню аккаунта и закр�
   expect(screen.getByRole('menuitem', { name: 'Мой профиль' })).toHaveFocus();
   await user.keyboard('{ArrowDown}');
   expect(screen.getByRole('menuitem', { name: 'Настройки' })).toHaveFocus();
+  await user.keyboard('{End}');
+  expect(screen.getByRole('menuitem', { name: 'Выйти' })).toHaveFocus();
+  await user.keyboard('{Home}');
+  expect(screen.getByRole('menuitem', { name: 'Мой профиль' })).toHaveFocus();
+  await user.keyboard('{ArrowUp}');
+  expect(screen.getByRole('menuitem', { name: 'Выйти' })).toHaveFocus();
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   expect(button).toHaveFocus();
+  await user.click(button);
+  await user.tab();
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 });
 it('закрывает меню снаружи и выполняет logout', async () => {
   renderPage(
@@ -68,4 +78,28 @@ it('показывает гостю вход и регистрацию', () => {
   renderPage(<Layout />);
   expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
   expect(screen.getByRole('link', { name: 'Регистрация' })).toHaveAttribute('href', '/register');
+});
+it('закрывает мобильную навигацию по Escape и возвращает фокус', async () => {
+  renderPage(<Layout />);
+  const user = userEvent.setup();
+  const trigger = screen.getByRole('button', { name: 'Основное меню' });
+  await user.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await user.keyboard('{Escape}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(trigger).toHaveFocus();
+});
+function QueryChange() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate('/?sort=quick')}>Фильтр</button>;
+}
+it('не прокручивает каталог наверх при изменении query-фильтра', async () => {
+  renderPage(
+    <Layout>
+      <QueryChange />
+    </Layout>,
+  );
+  window.scrollTo.mockClear();
+  await userEvent.click(screen.getByRole('button', { name: 'Фильтр' }));
+  expect(window.scrollTo).not.toHaveBeenCalled();
 });

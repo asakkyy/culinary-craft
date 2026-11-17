@@ -29,7 +29,13 @@ export default function Modal({ title, children, onClose, busy = false, wide = f
       onKeyDown={(event) => {
         if (event.key !== 'Tab') return;
         const controls = [...ref.current.querySelectorAll('button, a[href], input, select, textarea, [tabindex]')].filter(
-          (element) => !element.disabled && !element.hidden && element.tabIndex >= 0,
+          (element) =>
+            !element.disabled &&
+            !element.hidden &&
+            element.tabIndex >= 0 &&
+            !element.closest('[hidden], [inert]') &&
+            getComputedStyle(element).display !== 'none' &&
+            getComputedStyle(element).visibility !== 'hidden',
         );
         const first = controls[0];
         const last = controls[controls.length - 1];
@@ -59,7 +65,7 @@ export default function Modal({ title, children, onClose, busy = false, wide = f
       <header className="dialog-header">
         <h2 id={titleId}>{title}</h2>
         <button className="icon-button" aria-label="Закрыть окно" onClick={onClose} disabled={busy}>
-          <X />
+          <X aria-hidden="true" />
         </button>
       </header>
       <div className="dialog-body">{children}</div>

@@ -1,3 +1,4 @@
+import FormError from '../components/FormError';
 import ImageUpload from '../components/ImageUpload';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -78,17 +79,21 @@ export default function SettingsPage() {
           }}
         />
       </section>
-      {error && (
-        <p className="error-box" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <FormError>{error}</FormError>}
       <section className="editor-card">
         <h2>Имя</h2>
         <form onSubmit={(e) => save(e, 'name')}>
           <div className="field">
             <label htmlFor="profile-name">Отображаемое имя</label>
-            <input id="profile-name" minLength={2} maxLength={80} required value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              id="profile-name"
+              name="profile-name"
+              minLength={2}
+              maxLength={80}
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <button disabled={busy} className="btn btn-primary">
             Сохранить имя
@@ -104,12 +109,22 @@ export default function SettingsPage() {
         <form onSubmit={(e) => save(e, 'email')}>
           <div className="field">
             <label htmlFor="profile-email">Новый email</label>
-            <input id="profile-email" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              id="profile-email"
+              name="profile-email"
+              type="email"
+              spellCheck={false}
+              required
+              maxLength={254}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           <div className="field">
             <label htmlFor="email-password">Пароль для смены email</label>
             <input
               id="email-password"
+              name="email-password"
               type="password"
               autoComplete="current-password"
               required
@@ -131,6 +146,7 @@ export default function SettingsPage() {
             <label htmlFor="current-password">Текущий пароль</label>
             <input
               id="current-password"
+              name="current-password"
               autoComplete="current-password"
               type="password"
               required
@@ -143,6 +159,7 @@ export default function SettingsPage() {
             <label htmlFor="new-password">Новый пароль</label>
             <input
               id="new-password"
+              name="new-password"
               autoComplete="new-password"
               type="password"
               required

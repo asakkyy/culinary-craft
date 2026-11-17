@@ -1,8 +1,16 @@
+import FormError from '../components/FormError';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Mail, KeyRound } from 'lucide-react';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
+function storedDeadline(key) {
+  try {
+    return Number(sessionStorage.getItem(key)) || 0;
+  } catch {
+    return 0;
+  }
+}
 
 export default function RecoveryPage({ mode }) {
   const app = useApp();
@@ -16,6 +24,7 @@ export default function RecoveryPage({ mode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [verified, setVerified] = useState(false);
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
   }, []);
@@ -23,16 +32,36 @@ export default function RecoveryPage({ mode }) {
     if (app?.user?.email) setEmail(app.user.email);
   }, [app?.user?.email]);
   useEffect(() => {
-    setDeadline(Number(sessionStorage.getItem(cooldownKey)) || 0);
+    setDeadline(storedDeadline(cooldownKey));
     setNow(Date.now());
   }, [cooldownKey]);
   useEffect(() => {
     if (deadline <= Date.now()) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => {
+      const time = Date.now();
+      setNow(time);
+      if (time >= deadline) clearInterval(timer);
+    }, 1000);
     return () => clearInterval(timer);
   }, [deadline]);
   const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
   const titles = { forgot: 'Восстановление пароля', resend: 'Подтверждение email', verify: 'Подтвердить email', reset: 'Новый пароль' };
+  async function finishVerification() {
+    setBusy(true);
+    setError('');
+    try {
+      const account = app?.user ? await app.refreshUser() : null;
+      app?.notify?.('Email подтверждён');
+      navigate(account === null ? '/login' : '/profile', { replace: true, state: { notice: 'Email подтверждён. Войдите в аккаунт.' } });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        app?.forgetUser?.();
+        navigate('/login', { replace: true, state: { notice: 'Email подтверждён. Войдите в аккаунт.' } });
+      } else setError('Email подтверждён, но не удалось обновить аккаунт. Повторите обновление');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
@@ -44,13 +73,16 @@ export default function RecoveryPage({ mode }) {
         const after = Date.now() + 60000;
         setNow(Date.now());
         setDeadline(after);
-        sessionStorage.setItem(cooldownKey, String(after));
+        try {
+          sessionStorage.setItem(cooldownKey, String(after));
+        } catch {
+          /* Server throttling still applies when storage is unavailable. */
+        }
       } else {
         if (mode === 'verify') {
           await api.verifyEmail({ token });
-          if (app?.user) await app.refreshUser();
-          app?.notify?.('Email подтверждён');
-          navigate(app?.user ? '/profile' : '/login', { replace: true, state: { notice: 'Email подтверждён. Войдите в аккаунт.' } });
+          setVerified(true);
+          await finishVerification();
         } else {
           await api.resetPassword({ token, password });
           app?.forgetUser();
@@ -78,7 +110,9 @@ export default function RecoveryPage({ mode }) {
   if ((mode === 'resend' || mode === 'verify') && app?.user?.emailVerified) return <Navigate to="/profile" replace />;
   return (
     <section className="container narrow-page auth-page">
-      <div className="auth-symbol">{mode === 'forgot' || mode === 'reset' ? <KeyRound /> : <Mail />}</div>
+      <div className="auth-symbol">
+        {mode === 'forgot' || mode === 'reset' ? <KeyRound aria-hidden="true" /> : <Mail aria-hidden="true" />}
+      </div>
       <h1>{titles[mode]}</h1>
       <p>
         {mode === 'resend'
@@ -88,12 +122,13 @@ export default function RecoveryPage({ mode }) {
       {mode === 'resend' && (
         <p className="info-note">Письмо отправляется только по кнопке «Отправить письмо». Не чаще раза в минуту и до пяти раз в сутки.</p>
       )}
-      {error && (
-        <p className="error-box" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <FormError>{error}</FormError>}
       {message && <p role="status">{message}</p>}
+      {verified && error && (
+        <button className="btn btn-primary" disabled={busy} onClick={finishVerification}>
+          Обновить аккаунт
+        </button>
+      )}
       {linkAction && !token ? (
         <p role="alert">Откройте полную ссылку из письма либо запросите новую.</p>
       ) : (
@@ -104,7 +139,9 @@ export default function RecoveryPage({ mode }) {
                 <label htmlFor="recovery-email">Email аккаунта</label>
                 <input
                   id="recovery-email"
+                  name="recovery-email"
                   type="email"
+                  spellCheck={false}
                   autoComplete="email"
                   required
                   maxLength={254}
@@ -118,6 +155,7 @@ export default function RecoveryPage({ mode }) {
                 <label htmlFor="recovery-password">Новый пароль</label>
                 <input
                   id="recovery-password"
+                  name="recovery-password"
                   type="password"
                   autoComplete="new-password"
                   minLength={12}

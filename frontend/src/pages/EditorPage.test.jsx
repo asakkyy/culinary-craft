@@ -41,6 +41,9 @@ it('валидирует ингредиенты и шаги на уровне ф
   await user.click(screen.getByRole('button', { name: 'Отправить рецепт' }));
   expect(await screen.findByText('Добавь хотя бы один ингредиент и один шаг.')).toBeInTheDocument();
   expect(api.create).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveFocus();
+  await user.type(screen.getByRole('textbox', { name: 'Ингредиент 1' }), 'Морковь');
+  expect(screen.getByRole('textbox', { name: 'Ингредиент 1' })).toHaveFocus();
 });
 
 it('отправляет данные формы в API для модерации', async () => {
@@ -74,4 +77,16 @@ it('загружает существующий рецепт для редакт
   );
   expect(await screen.findByDisplayValue('Тестовый домашний суп')).toBeInTheDocument();
   expect(api.one).toHaveBeenCalledWith('123');
+});
+it('не показывает пустую форму редактирования после ошибки загрузки', async () => {
+  api.one.mockRejectedValueOnce(new Error('Рецепт не найден'));
+  render(
+    <MemoryRouter initialEntries={['/recipes/404/edit']}>
+      <Routes>
+        <Route path="/recipes/:id/edit" element={<EditorPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent('Рецепт не найден');
+  expect(screen.queryByRole('button', { name: 'Сохранить изменения' })).not.toBeInTheDocument();
 });

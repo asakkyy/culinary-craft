@@ -21,7 +21,7 @@ http.interceptors.request.use(async (config) => {
 
 export function errorText(error) {
   if (error.response?.data?.message) return error.response.data.message;
-  if (error.code === 'ERR_NETWORK') return 'Нет соединения с backend. Запустите Spring Boot на порту 8080.';
+  if (error.code === 'ERR_NETWORK') return 'Не удалось связаться с сервером. Проверьте подключение и повторите попытку.';
   return 'Не удалось выполнить действие. Попробуйте ещё раз.';
 }
 

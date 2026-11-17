@@ -4,7 +4,7 @@ export function StatusBadge({ value, labels }) {
 export function TablePagination({ data, page, size, onPage, onSize, loading }) {
   return (
     <div className="table-pagination">
-      <span>Всего: {data?.total ?? 0}</span>
+      <span>Всего: {data?.total ?? '—'}</span>
       <label>
         Строк на странице{' '}
         <select aria-label="Строк на странице" value={size} onChange={(e) => onSize(Number(e.target.value))}>
@@ -19,9 +19,7 @@ export function TablePagination({ data, page, size, onPage, onSize, loading }) {
         <button className="btn btn-outline" disabled={loading || !page} onClick={() => onPage(page - 1)}>
           Назад
         </button>
-        <span aria-live="polite">
-          {page + 1} / {Math.max(1, data?.totalPages || 0)}
-        </span>
+        <span aria-live="polite">{data ? `${page + 1} / ${Math.max(1, data.totalPages || 0)}` : '— / —'}</span>
         <button className="btn btn-outline" disabled={loading || page + 1 >= (data?.totalPages || 0)} onClick={() => onPage(page + 1)}>
           Далее
         </button>
@@ -29,10 +27,11 @@ export function TablePagination({ data, page, size, onPage, onSize, loading }) {
     </div>
   );
 }
-export default function DataTable({ columns, children, empty, loading }) {
+export default function DataTable({ columns, children, empty, loading, label = 'Результаты' }) {
   return (
     <div className="table-scroll" role="region" aria-label="Таблица результатов" tabIndex={0} aria-busy={loading}>
       <table className="data-table">
+        <caption className="visually-hidden">{label}</caption>
         <thead>
           <tr>
             {columns.map((c) => (

@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState } from 'react';
+import { createElement, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ClipboardList, Users, ScrollText, BookOpen, HardDrive, LayoutDashboard, ExternalLink } from 'lucide-react';
 import { api, errorText } from '../api/client';
@@ -45,15 +45,28 @@ export default function AdminPage() {
   const { user, notify } = useApp();
   const [params, setParams] = useSearchParams();
   const tab = Object.hasOwn(sections, params.get('section')) ? params.get('section') : 'reports';
-  const [status, setStatus] = useState('');
-  const [role, setRole] = useState('');
-  const [sort, setSort] = useState('createdAt,desc');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [size, setSize] = useState(10);
+  const status = params.get(tab === 'audit' ? 'action' : 'status') || '';
+  const role = params.get('role') || '';
+  const sort = params.get('sort') || (tab === 'users' ? 'registeredAt,desc' : 'createdAt,desc');
+  const search = params.get('search') || '';
+  const page = Math.max(0, Math.min(1000000, Math.floor(Number(params.get('page')) || 0)));
+  const size = [10, 20, 50].includes(Number(params.get('size'))) ? Number(params.get('size')) : 10;
+  const updateFilters = useCallback(
+    (patch, replace = false) => {
+      const next = new URLSearchParams(params);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === '' || value === 0) next.delete(key);
+        else next.set(key, String(value));
+      }
+      setParams(next, { replace });
+    },
+    [params, setParams],
+  );
+  const setPage = useCallback((value) => updateFilters({ page: value }), [updateFilters]);
   const [version, setVersion] = useState(0);
   const [resultData, setData] = useState(null);
-  const data = resultData?.section === tab ? resultData : null;
+  const requestKey = JSON.stringify([tab, page, size, status, role, sort, search]);
+  const data = resultData?.requestKey === requestKey ? resultData : null;
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -63,11 +76,6 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState(false);
   const [actionError, setActionError] = useState('');
   useEffect(() => {
-    setStatus('');
-    setRole('');
-    setSearch('');
-    setSort(tab === 'users' ? 'registeredAt,desc' : 'createdAt,desc');
-    setPage(0);
     setSelected(null);
   }, [tab]);
   useEffect(() => {
@@ -99,7 +107,7 @@ export default function AdminPage() {
       request
         .then((result) => {
           if (active) {
-            setData({ ...result, section: tab });
+            setData({ ...result, requestKey });
             if (page && page >= result.totalPages) setPage(Math.max(0, result.totalPages - 1));
           }
         })
@@ -114,7 +122,7 @@ export default function AdminPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [tab, status, role, sort, search, page, size, version]);
+  }, [tab, status, role, sort, search, page, size, version, requestKey, setPage]);
   function changeTab(key) {
     setData(null);
     setLoading(true);
@@ -168,10 +176,10 @@ export default function AdminPage() {
         <aside className="admin-sidebar">
           <nav aria-label="Разделы управления">
             {Object.entries(sections).map(([key, [name, Icon]]) => (
-              <button key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => changeTab(key)}>
-                {createElement(Icon)}
+              <Link key={key} aria-current={tab === key ? 'page' : undefined} to={`/admin?section=${key}`}>
+                {createElement(Icon, { 'aria-hidden': true })}
                 {name}
-              </button>
+              </Link>
             ))}
           </nav>
           <p>Все решения фиксируются в журнале аудита</p>
@@ -186,7 +194,7 @@ export default function AdminPage() {
                   .filter(([key]) => key !== 'overview')
                   .map(([key, [name, Icon]]) => (
                     <button className="overview-link" key={key} onClick={() => changeTab(key)}>
-                      {createElement(Icon)}
+                      {createElement(Icon, { 'aria-hidden': true })}
                       <strong>{name}</strong>
                       <span>
                         {
@@ -224,8 +232,7 @@ export default function AdminPage() {
                       value={search}
                       maxLength={100}
                       onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(0);
+                        updateFilters({ search: e.target.value, page: 0 }, true);
                       }}
                     />
                   </label>
@@ -236,8 +243,7 @@ export default function AdminPage() {
                     aria-label="Фильтр статуса"
                     value={status}
                     onChange={(e) => {
-                      setStatus(e.target.value);
-                      setPage(0);
+                      updateFilters({ [tab === 'audit' ? 'action' : 'status']: e.target.value, page: 0 });
                     }}
                   >
                     <option value="">Все</option>
@@ -255,8 +261,7 @@ export default function AdminPage() {
                       aria-label="Роль"
                       value={role}
                       onChange={(e) => {
-                        setRole(e.target.value);
-                        setPage(0);
+                        updateFilters({ role: e.target.value, page: 0 });
                       }}
                     >
                       <option value="">Все роли</option>
@@ -275,8 +280,7 @@ export default function AdminPage() {
                       aria-label="Сортировка"
                       value={sort}
                       onChange={(e) => {
-                        setSort(e.target.value);
-                        setPage(0);
+                        updateFilters({ sort: e.target.value, page: 0 });
                       }}
                     >
                       {Object.entries(
@@ -310,7 +314,7 @@ export default function AdminPage() {
                   </button>
                 </div>
               )}
-              <DataTable columns={columns} loading={loading} empty={!error && !data?.content.length}>
+              <DataTable label={sections[tab][0]} columns={columns} loading={loading} empty={!error && !data?.content.length}>
                 {data?.content.map((item) => (
                   <tr key={item.id}>
                     {tab === 'reports' ? (
@@ -320,7 +324,7 @@ export default function AdminPage() {
                         <td>
                           <Link className="table-link" to={`/recipes/${item.recipeId}`}>
                             {item.recipeTitle}
-                            <ExternalLink />
+                            <ExternalLink aria-hidden="true" />
                           </Link>
                         </td>
                         <td>
@@ -345,7 +349,7 @@ export default function AdminPage() {
                             <strong>{item.name}</strong>
                           </div>
                         </td>
-                        <td>{item.email || 'Адрес не задан'}</td>
+                        <td className="table-email">{item.email || 'Адрес не задан'}</td>
                         <td>{roles[item.role]}</td>
                         <td>
                           <StatusBadge value={item.status} labels={userStatuses} />
@@ -394,8 +398,7 @@ export default function AdminPage() {
                 size={size}
                 onPage={setPage}
                 onSize={(value) => {
-                  setSize(value);
-                  setPage(0);
+                  updateFilters({ size: value, page: 0 });
                 }}
                 loading={loading}
               />
@@ -436,7 +439,7 @@ export default function AdminPage() {
               {tab === 'reports' ? (
                 <>
                   <Link className="table-link" to={`/recipes/${selected.recipeId}`}>
-                    {selected.recipeTitle} <ExternalLink />
+                    {selected.recipeTitle} <ExternalLink aria-hidden="true" />
                   </Link>
                   <ReportRecipeSummary key={selected.recipeId} recipeId={selected.recipeId} />
                   <dl className="detail-list">

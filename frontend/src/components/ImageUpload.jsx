@@ -4,8 +4,14 @@ import { Upload } from 'lucide-react';
 export default function ImageUpload({ label, url, onFile, onDelete, busy = false }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const working = busy || pending;
   const id = useId();
   const [filename, setFilename] = useState('');
+  useEffect(() => {
+    setPreview(null);
+    setFilename('');
+  }, [url]);
   useEffect(
     () => () => {
       if (preview) URL.revokeObjectURL(preview);
@@ -23,10 +29,16 @@ export default function ImageUpload({ label, url, onFile, onDelete, busy = false
     }
     setPreview(URL.createObjectURL(file));
     setFilename(file.name);
+    setPending(true);
     try {
       await onFile(file);
     } catch (err) {
+      setPreview(null);
+      setFilename('');
       setError(err.message || 'Не удалось загрузить изображение');
+    } finally {
+      setPending(false);
+      event.target.value = '';
     }
   }
   return (
@@ -39,11 +51,11 @@ export default function ImageUpload({ label, url, onFile, onDelete, busy = false
           className="visually-hidden"
           type="file"
           accept="image/png,image/jpeg"
-          disabled={busy}
+          disabled={working}
           onChange={choose}
         />
         <label className="btn btn-outline" htmlFor={id}>
-          <Upload /> Выбрать изображение
+          <Upload aria-hidden="true" /> Выбрать изображение
         </label>
         <small>{filename || 'Файл не выбран'}</small>
       </div>
@@ -54,15 +66,18 @@ export default function ImageUpload({ label, url, onFile, onDelete, busy = false
         <button
           className="btn btn-outline"
           type="button"
-          disabled={busy}
+          disabled={working}
           onClick={async () => {
             setError('');
+            setPending(true);
             try {
               await onDelete();
               setPreview(null);
               setFilename('');
             } catch (err) {
               setError(err.message);
+            } finally {
+              setPending(false);
             }
           }}
         >
