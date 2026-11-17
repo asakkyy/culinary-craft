@@ -1,26 +1,31 @@
 package com.culinarycraft.service;
 
 import com.culinarycraft.model.DemoUser;
+import com.culinarycraft.persistence.DemoUserEntity;
+import com.culinarycraft.persistence.DemoUserRepository;
+import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@Transactional(readOnly = true)
 public class DemoUserService {
-    private final List<DemoUser> users = List.of(
-        new DemoUser(1, "Анна Петрова", "USER", "АП", "Любитель домашней кухни"),
-        new DemoUser(2, "Максим Еремин", "USER", "МЕ", "Автор рецептов"),
-        new DemoUser(3, "Марина Волкова", "ADMIN", "МВ", "Модератор сообщества")
-    );
+    private final DemoUserRepository users;
 
-    public List<DemoUser> all() { return users; }
+    public DemoUserService(DemoUserRepository users) { this.users = users; }
+
+    public List<DemoUser> all() {
+        return users.findAll(Sort.by("id")).stream().map(DemoUserEntity::toModel).toList();
+    }
 
     public DemoUser requireUser(Long id) {
         if (id == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Выберите демонстрационного пользователя");
         }
-        return users.stream().filter(user -> user.id() == id).findFirst()
+        return users.findById(id).map(DemoUserEntity::toModel)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неизвестный пользователь"));
     }
 
@@ -34,6 +39,6 @@ public class DemoUserService {
 
     public DemoUser optional(Long id) {
         if (id == null) return null;
-        return users.stream().filter(u -> u.id() == id).findFirst().orElse(null);
+        return users.findById(id).map(DemoUserEntity::toModel).orElse(null);
     }
 }

@@ -52,7 +52,7 @@ export default function Layout({ children }) {
       <footer className="site-footer"><div className="container footer-inner">
         <div><Link to="/" className="footer-brand"><ChefHat size={25} /> CulinaryCraft</Link><p>Место, где рецепты превращаются в любимые традиции.</p></div>
         <div className="footer-links"><Link to="/">Каталог</Link><Link to="/favorites">Избранное</Link><Link to="/profile">Моя кухня</Link></div>
-        <div className="footer-note">Учебный прототип · Лабораторная работа №6<br/>React + Spring Boot · Данные в памяти</div>
+        <div className="footer-note">Учебный прототип · Лабораторная работа №6<br/>React + Spring Boot · PostgreSQL</div>
       </div></footer>
       {toast && <div className={`toast toast-${toast.type}`} role="status">{toast.type === 'error' ? <AlertCircle size={19}/> : <CheckCircle2 size={19}/>} {toast.message}</div>}
       <UserPicker />

@@ -14,7 +14,7 @@ public class DemoController {
 
     @GetMapping("/health")
     public Map<String, String> health() {
-        return Map.of("status", "UP", "storage", "IN_MEMORY", "mode", "PROTOTYPE");
+        return Map.of("status", "UP", "storage", "POSTGRESQL", "mode", "PROTOTYPE");
     }
 
     @GetMapping("/users/demo")
