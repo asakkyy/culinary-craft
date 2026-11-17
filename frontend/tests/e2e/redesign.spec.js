@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 async function adminLogin(page) {
   await page.goto('/login');
@@ -18,8 +19,15 @@ test('Меню аккаунта: клавиатура, закрытие снар
   await page.screenshot({ path: test.info().outputPath('account-menu-1280.png') });
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Настройки', exact: true })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('menuitem', { name: 'Выйти' })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('menuitem', { name: 'Мой профиль' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await menu.click();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('menu')).toHaveCount(0);
   await menu.click();
   await page.getByRole('heading', { level: 1 }).click();
@@ -72,6 +80,7 @@ test('Таблицы запрашивают фильтры, сортировку
 test('Визуальная проверка всех страниц на 375, 768, 1280 и 1920 px', async ({ page, browser }, testInfo) => {
   test.setTimeout(180000);
   const errors = [];
+  const accessibility = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await adminLogin(page);
   const routes = [
@@ -96,7 +105,18 @@ test('Визуальная проверка всех страниц на 375, 76
       await expect(page.locator('h1').first()).toBeVisible();
       await expect(page.getByText('Загружаем записи…', { exact: true })).toHaveCount(0);
       await expect(page.locator('.card-skeleton')).toHaveCount(0);
+      // Full-page capture must load images below the fold as well as the visible lazy images.
+      await page.locator('img[loading="lazy"]').evaluateAll((images) =>
+        images.forEach((image) => {
+          image.loading = 'eager';
+        }),
+      );
+      await expect.poll(() => page.locator('img').evaluateAll((images) => images.every((image) => image.complete))).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}: ${route}`).toBe(true);
+      if (width === 1280) {
+        const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+        accessibility.push(...result.violations.map((v) => ({ route, width, id: v.id, nodes: v.nodes.map((n) => n.target) })));
+      }
       await page.screenshot({
         path: testInfo.outputPath(`after-${route === '/' ? 'catalog' : route.slice(1).replaceAll(/[/?=]/g, '-')}-${width}.png`),
         fullPage: true,
@@ -110,19 +130,27 @@ test('Визуальная проверка всех страниц на 375, 76
   });
   try {
     const p = await guest.newPage();
-    for (const route of [
-      '/login',
-      '/register',
-      '/forgot-password',
-      '/resend-verification',
-      '/verify-email',
-      '/reset-password',
-      '/missing',
-    ]) {
-      await p.goto(route);
-      expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await p.screenshot({ path: testInfo.outputPath(`after-${route.slice(1)}-375.png`), fullPage: true });
+    for (const width of [375, 768, 1280, 1920]) {
+      await p.setViewportSize({ width, height: 900 });
+      for (const route of [
+        '/login',
+        '/register',
+        '/forgot-password',
+        '/resend-verification',
+        '/verify-email',
+        '/reset-password',
+        '/missing',
+      ]) {
+        await p.goto(route);
+        expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        if (width === 375) {
+          const result = await new AxeBuilder({ page: p }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+          accessibility.push(...result.violations.map((v) => ({ route, width, id: v.id, nodes: v.nodes.map((n) => n.target) })));
+        }
+        await p.screenshot({ path: testInfo.outputPath(`after-${route.slice(1)}-${width}.png`), fullPage: true });
+      }
     }
+    await p.setViewportSize({ width: 375, height: 812 });
     await p.goto('/');
     await p.getByRole('button', { name: 'Основное меню' }).click();
     await expect(p.getByRole('link', { name: 'Моя кухня', exact: true }).first()).toBeVisible();
@@ -130,4 +158,5 @@ test('Визуальная проверка всех страниц на 375, 76
     await guest.close();
   }
   expect(errors).toEqual([]);
+  expect(accessibility).toEqual([]);
 });

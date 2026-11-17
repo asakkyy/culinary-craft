@@ -744,7 +744,7 @@ h2 {
   align-items: center;
   flex-direction: column;
   gap: 16px;
-  color: #5d715f;
+  color: var(--secondary);
   font-size: 13px;
 }
 .cover-fallback svg {

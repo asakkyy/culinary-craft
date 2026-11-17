@@ -63,7 +63,7 @@ test('SQL-пагинация каталога и административна�
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: /Меню аккаунта/ })).toBeVisible();
   await page.goto('/admin');
-  await page.getByRole('button', { name: 'Хранилище', exact: true }).click();
+  await page.getByRole('link', { name: 'Хранилище', exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('admin-mobile.png'), fullPage: true });
 });
@@ -124,12 +124,12 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await expect(report).toContainText('Закрыта');
     await page.reload();
     await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
-    await admin.getByRole('button', { name: 'Аудит', exact: true }).click();
+    await admin.getByRole('link', { name: 'Аудит', exact: true }).click();
     await expect(admin.locator('tbody').getByText('Жалоба закрыта', { exact: true })).toBeVisible();
-    await admin.getByRole('button', { name: 'Хранилище', exact: true }).click();
+    await admin.getByRole('link', { name: 'Хранилище', exact: true }).click();
     await admin.getByRole('button', { name: 'Проверить без удаления' }).click();
     await expect(admin.getByRole('status').filter({ hasText: 'Режим:' })).toContainText('Режим: без удаления');
-    await admin.getByRole('button', { name: 'Пользователи', exact: true }).click();
+    await admin.getByRole('link', { name: 'Пользователи', exact: true }).click();
     await admin.getByRole('searchbox', { name: 'Административный поиск' }).fill(email);
     const row = admin.locator('tbody tr').filter({ hasText: email });
     await row.getByRole('button', { name: 'Заблокировать', exact: true }).click();

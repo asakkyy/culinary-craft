@@ -24,6 +24,7 @@ class AdministrationApiTest extends PostgresIntegrationTest {
     @Autowired TokenService tokens;
     @Autowired AdministrationService service;
     @Autowired AuditRepository audit;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final String password = "Test admin password 123";
     private DemoUserEntity create(String email, String role) {
         var user = DemoUserEntity.account("Author " + email, email, passwords.encode(password), role);
@@ -122,6 +123,9 @@ class AdministrationApiTest extends PostgresIntegrationTest {
             long reportId = service.report(person.getId(), 1, new AdministrationService.ReportInput(RecipeReport.Reason.OTHER, "")).id();
             service.decide(admin.getId(), reportId, new AdministrationService.Decision(RecipeReport.Status.RESOLVED, "Проверено"));
         }
+        users.flush();
+        jdbc.update("update recipe_reports set created_at = timestamp with time zone '2026-01-01 00:00:00+00' where reporter_id in (select id from demo_users where email like 'page%@example.test')");
+        jdbc.update("update administrative_audit set created_at = timestamp with time zone '2026-01-01 00:00:00+00' where admin_id = ?", admin.getId());
         for (int size : new int[]{10, 20, 50}) {
             mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("search", "Pagination ").param("role", "USER")
                 .param("status", "ACTIVE").param("sort", "name,asc").param("size", String.valueOf(size)))
@@ -139,6 +143,13 @@ class AdministrationApiTest extends PostgresIntegrationTest {
         mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("search", "Pagination ").param("sort", "name,asc").param("role", "USER")
             .param("size", "10").param("page", "2")).andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(3)).andExpect(jsonPath("$.content[0].name").value("Pagination 20"));
+        for (String endpoint : java.util.List.of("/api/admin/reports?sort=createdAt,desc&status=RESOLVED", "/api/admin/audit?action=REPORT_RESOLVED")) {
+            var response = mvc.perform(get(endpoint).cookie(cookie(admin)).param("size", "50"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            var content = json.readTree(response).get("content");
+            assertEquals(23, content.size());
+            for (int i = 1; i < content.size(); i++) assertTrue(content.get(i - 1).get("id").asLong() > content.get(i).get("id").asLong());
+        }
     }
     @Test void unpublishingIsProtectedAuditedAndPreservesTheRecipe() throws Exception {
         var admin = create("publisher@example.test", "ADMIN"); var owner = create("reader@example.test", "USER");
