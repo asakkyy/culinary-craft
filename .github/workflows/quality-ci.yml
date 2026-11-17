@@ -15,16 +15,16 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  pull-requests: read
 
 jobs:
   backend:
     name: 'Backend: Checkstyle, JUnit, integration, JaCoCo, JAR'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '21'
@@ -52,7 +52,7 @@ jobs:
           cp backend/build/libs/*.jar backend/reports/backend/build/ 2>/dev/null || true
       - name: Upload backend quality report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backend-quality-report
           path: backend/reports/backend/
@@ -61,12 +61,15 @@ jobs:
 
   frontend:
     name: 'Frontend: ESLint, Vitest, coverage and production build'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          package-manager-cache: false
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
@@ -99,7 +102,7 @@ jobs:
         run: cp -r frontend/dist frontend/reports/frontend/build/dist 2>/dev/null || true
       - name: Upload frontend quality report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: frontend-quality-report
           path: frontend/reports/frontend/
@@ -108,7 +111,7 @@ jobs:
 
   e2e:
     name: 'Browser E2E: real React + Spring Boot + Chromium'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mailpit:
         image: axllent/mailpit:v1.27
@@ -135,16 +138,19 @@ jobs:
       DB_USERNAME: culinary_demo
       DB_PASSWORD: culinary_demo_local
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
           cache-dependency-path: backend/**/*.gradle*
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          package-manager-cache: false
       - name: Allow Gradle wrapper execution
         run: chmod +x backend/gradlew
       - name: Install frontend packages
@@ -161,7 +167,7 @@ jobs:
         run: npm run test:e2e
       - name: Upload browser HTML and JUnit XML
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-e2e-report
           path: |
@@ -174,33 +180,40 @@ jobs:
     name: 'Metrics: coverage, static checks, individual tests and Git history'
     if: always()
     needs: [backend, frontend, e2e]
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: always()
         with:
           name: backend-quality-report
           path: ci-input/backend
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: always()
         with:
           name: frontend-quality-report
           path: ci-input/frontend
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: always()
         with:
           name: browser-e2e-report
           path: ci-input/browser
       - name: Put Playwright JUnit results alongside frontend test reports
+        if: always()
         shell: bash
         run: |
           mkdir -p ci-input/frontend/tests
           REPORT="$(find ci-input/browser -type f -name playwright-junit.xml -print -quit 2>/dev/null || true)"
           if [ -n "$REPORT" ]; then cp "$REPORT" ci-input/frontend/tests/playwright-junit.xml; fi
       - name: Generate CSV, JSON, summary and per-test report
+        if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
           STAGE_NAME: ${{ inputs.stage || 'regular-ci' }}
@@ -213,7 +226,7 @@ jobs:
             --require-complete
       - name: Upload metrics report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: quality-metrics-${{ github.run_number }}-${{ github.run_attempt }}
           path: reports/summary/
@@ -224,7 +237,7 @@ jobs:
     name: Quality Gate
     if: always()
     needs: [backend, frontend, e2e, metrics]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Enforce all mandatory checks
         env:
