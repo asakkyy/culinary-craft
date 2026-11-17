@@ -1276,6 +1276,12 @@ textarea:focus {
   width: 88px;
   height: 88px;
   font-size: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ece9df;
+  color: var(--accent);
+  flex-shrink: 0;
 }
 .profile-cover h1 {
   font-family: Georgia, serif;

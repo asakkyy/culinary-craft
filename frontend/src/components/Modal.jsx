@@ -4,15 +4,18 @@ import { X } from 'lucide-react';
 
 export default function Modal({ title, children, onClose, busy = false, wide = false }) {
   const ref = useRef(null);
+  const returnFocus = useRef(document.activeElement);
   const titleId = useId();
   useEffect(() => {
-    const previous = document.activeElement;
     const dialog = ref.current;
+    const previous = returnFocus.current;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     if (dialog.showModal) dialog.showModal();
     else dialog.setAttribute('open', '');
     return () => {
+      if (dialog.open && dialog.close) dialog.close();
+      else dialog.removeAttribute('open');
       document.body.style.overflow = overflow;
       previous?.focus();
     };
