@@ -1,35 +1,19 @@
 import { test, expect } from '@playwright/test';
-import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
+import { database } from './database';
 
 const password = () => process.env.CC_E2E_ADMIN_PASSWORD;
 const mailpit = process.env.E2E_MAILPIT_URL || 'http://127.0.0.1:8025';
 let marker;
 let people;
 let administrator;
-async function database(work) {
-  if (!process.env.E2E_DB_URL?.startsWith('jdbc:postgresql://')) throw new Error('An explicit isolated E2E database is required');
-  const location = new URL(process.env.E2E_DB_URL.slice(5));
-  const client = new Client({
-    host: location.hostname,
-    port: Number(location.port || 5432),
-    database: location.pathname.slice(1),
-    user: process.env.DB_USERNAME || 'culinary_demo',
-    password: process.env.DB_PASSWORD || 'culinary_demo_local',
-  });
-  await client.connect();
-  try {
-    return await work(client);
-  } finally {
-    await client.end();
-  }
-}
+let administratorCookies;
 async function mutate(request, path, data, method = 'post') {
   const csrf = await (await request.get('/api/auth/csrf')).json();
   return request[method](path, { data, headers: { 'X-XSRF-TOKEN': csrf.token } });
 }
-async function login(page, email = administrator) {
+async function login(page, email) {
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Пароль', { exact: true }).fill(password());
@@ -56,7 +40,7 @@ async function verificationLink(request, email) {
   if (!link) throw new Error('Local verification link was not found');
   return link;
 }
-test.beforeAll(async () => {
+test.beforeAll(async ({ request }) => {
   marker = 'Audit-' + randomUUID().slice(0, 8);
   administrator = 'moderator-' + randomUUID() + '@e2e.invalid';
   people = await database(async (client) => {
@@ -87,6 +71,9 @@ test.beforeAll(async () => {
     );
     return users.rows;
   });
+  const session = await mutate(request, '/api/auth/login', { email: administrator, password: password() });
+  expect(session.ok()).toBe(true);
+  administratorCookies = (await request.storageState()).cookies;
 });
 
 test('V01 — email: явная отправка, другая вкладка, повторный вход и смена адреса', async ({ page, context }) => {
@@ -205,7 +192,7 @@ test('V03 — жалоба без описания, дубликат, отказ
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
     const p = await admin.newPage();
-    await login(p);
+    await admin.addCookies(administratorCookies);
     await p.goto('/admin?section=reports&search=' + people[1].email);
     const row = p
       .locator('tbody tr')
@@ -230,7 +217,7 @@ test('V03 — жалоба без описания, дубликат, отказ
 });
 
 test('V04 — реальные 55 пользователей, размеры 10/20/50, фильтры, сортировка и reload', async ({ page }) => {
-  await login(page);
+  await page.context().addCookies(administratorCookies);
   await page.goto('/admin?section=users&search=' + marker + '&role=USER&sort=name,asc');
   await expect(page.locator('tbody tr')).toHaveCount(10);
   await expect(page.locator('.table-pagination')).toContainText('Всего: 55');
@@ -279,7 +266,7 @@ test('V05 — создание, редактирование, фотографи
   expect((await guest.request.get(image)).status()).toBe(404);
   await guest.close();
   const admin = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
-  await mutate(admin.request, '/api/auth/login', { email: administrator, password: password() });
+  await admin.addCookies(administratorCookies);
   try {
     expect((await mutate(admin.request, '/api/recipes/' + id + '/moderate', { status: 'APPROVED' })).status()).toBe(200);
     await page.reload();
@@ -307,7 +294,7 @@ test('V06 — сложные состояния, контраст, семант�
   test.setTimeout(120000);
   const runtime = [];
   page.on('pageerror', (e) => runtime.push(e.message));
-  await login(page);
+  await page.context().addCookies(administratorCookies);
   for (const width of [375, 768, 1280, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/admin?section=users&search=' + marker + '&size=50');
@@ -393,7 +380,7 @@ test('V07 — отсутствие фото, ошибка изображения
   await page.goto('/login');
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
-  await login(page);
+  await page.context().addCookies(administratorCookies);
   await page.route('**/api/admin/**', (route) => route.fulfill({ json: { content: [], total: 0, page: 0, size: 10, totalPages: 0 } }));
   for (const section of ['reports', 'users', 'audit']) {
     await page.goto('/admin?section=' + section);

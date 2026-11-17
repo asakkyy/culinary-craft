@@ -1167,6 +1167,22 @@ h2 {
   display: grid;
   gap: 24px;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.editor-draft {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.editor-draft p {
+  margin: 0;
+}
+.editor-draft:has(p:empty:only-child) {
+  margin-bottom: 0;
 }
 .editor-card {
   padding: 24px;
