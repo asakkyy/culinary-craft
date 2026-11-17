@@ -9,6 +9,9 @@ plugins {
 group = 'com.culinarycraft'
 version = '0.7.0-SNAPSHOT'
 
+// Boot 3.5.7 manages 1.21.3 (Docker API 1.32); newer CI engines require a newer API.
+ext['testcontainers.version'] = '1.21.4'
+
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
