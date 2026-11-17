@@ -183,6 +183,10 @@ public class RecipeService {
     }
 
     private Recipe fromRequest(long id, RecipeRequest request, DemoUser user, String status, Instant createdAt) {
+        if (request.imageUrl() != null && request.imageUrl().strip().startsWith("/api/media/")
+            && (id == 0 || !required(id).imageUrl().equals(request.imageUrl().strip()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Управляемые фотографии изменяются только через загрузку файла");
+        }
         return new Recipe(id, request.title().strip(), request.description().strip(), request.category(),
             request.emoji() == null || request.emoji().isBlank() ? "🍽️" : request.emoji(),
             request.imageUrl() == null ? "" : request.imageUrl().strip(), request.prepMinutes(),

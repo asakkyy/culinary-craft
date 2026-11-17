@@ -2,6 +2,12 @@
 
 ## Quality hardening
 
+- MediaCleanupService: dry-run/ADMIN API, minimum age 24h, max 500 generated files per batch.
+- PostgreSQL advisory lock 61319488: upload/delete transactions shared, cleaner exclusive.
+- Never remove referenced files, follow symlinks, recursively traverse MEDIA_ROOT or accept user paths.
+- Scheduler opt-in MEDIA_CLEANUP_ENABLED; deletion separately opt-in MEDIA_CLEANUP_DRY_RUN=false.
+- Tests must use temporary MEDIA_ROOT and keep background cleanup disabled.
+
 - V7: хешированные одноразовые email-токены, SMTP через Spring Mail, локально Mailpit.
 - До email verification разрешены вход/настройки, запись контента запрещена SecurityFilterChain.
 - Не делать LEGACY активными. V7 доверяет только существующим не-legacy ADMIN, USER подтверждают адрес.

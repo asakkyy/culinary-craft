@@ -18,8 +18,10 @@ public class MediaService {
     private final ImageStorage storage;
     private final DemoUserRepository users;
     private final RecipeRepository recipes;
-    public MediaService(MediaRepository files, ImageStorage storage, DemoUserRepository users, RecipeRepository recipes) {
+    private final MediaReferences references;
+    public MediaService(MediaRepository files, ImageStorage storage, DemoUserRepository users, RecipeRepository recipes, MediaReferences references) {
         this.files = files; this.storage = storage; this.users = users; this.recipes = recipes;
+        this.references = references;
     }
     private DemoUserEntity account(long id) {
         var user = users.lockById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
@@ -29,7 +31,7 @@ public class MediaService {
     private void remove(List<MediaFile> old) {
         files.deleteAll(old); files.flush();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { old.forEach(file -> storage.delete(file.getId())); }
+            @Override public void afterCommit() { old.forEach(file -> { if (!references.used(file.getId())) storage.delete(file.getId()); }); }
         });
     }
     private MediaFile store(MultipartFile upload, long owner, Long recipe, String kind) {
@@ -40,6 +42,7 @@ public class MediaService {
         return files.saveAndFlush(new MediaFile(image.id(), owner, recipe, kind, image.bytes(), image.width(), image.height()));
     }
     public AccountView avatar(long userId, MultipartFile upload) {
+        references.uploading();
         var user = account(userId);
         var old = files.findByOwnerIdAndKind(userId, "AVATAR");
         // Validate and write before touching the old reference.
@@ -52,6 +55,7 @@ public class MediaService {
         user.avatar(file.url()); return AccountView.of(user);
     }
     public void deleteAvatar(long userId) {
+        references.uploading();
         var user = account(userId); remove(files.findByOwnerIdAndKind(userId, "AVATAR")); user.avatar(null);
     }
     private RecipeEntity ownRecipe(long id, long userId) {
@@ -62,6 +66,7 @@ public class MediaService {
         return recipe;
     }
     public MediaView photo(long recipeId, long userId, MultipartFile upload) {
+        references.uploading();
         var recipe = ownRecipe(recipeId, userId);
         var old = files.findByRecipeId(recipeId);
         // Removing metadata is transactional; its files remain until commit.
@@ -70,9 +75,10 @@ public class MediaService {
         recipe.photo(file.url()); return new MediaView(file.getId(), file.url());
     }
     public void deletePhoto(long recipeId, long userId) {
+        references.uploading();
         var recipe = ownRecipe(recipeId, userId); remove(files.findByRecipeId(recipeId)); recipe.photo("");
     }
-    public void deleteForRecipe(long recipeId) { remove(files.findByRecipeId(recipeId)); }
+    public void deleteForRecipe(long recipeId) { references.uploading(); remove(files.findByRecipeId(recipeId)); }
     @Transactional(readOnly = true)
     public byte[] read(UUID id, Long userId) {
         var file = files.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));

@@ -61,6 +61,9 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await page.reload(); await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
     await admin.getByRole('button', { name: 'Аудит', exact: true }).click();
     await expect(admin.getByText('REPORT_RESOLVED', { exact: true })).toBeVisible();
+    await admin.getByRole('button', { name: 'Хранилище', exact: true }).click();
+    await admin.getByRole('button', { name: 'Проверить без удаления' }).click();
+    await expect(admin.getByRole('status').filter({ hasText: 'Режим:' })).toContainText('Режим: без удаления');
     await admin.getByRole('button', { name: 'Пользователи', exact: true }).click();
     await admin.getByRole('textbox', { name: 'Административный поиск' }).fill(email);
     const row = admin.locator('article').filter({ hasText: email });

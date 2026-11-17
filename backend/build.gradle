@@ -48,6 +48,7 @@ tasks.withType(Checkstyle).configureEach {
 jacoco { toolVersion = '0.8.13' }
 
 tasks.named('test') {
+    environment 'MEDIA_CLEANUP_ENABLED', 'false'
     environment 'MAIL_HOST', '127.0.0.1'
     environment 'MAIL_PORT', '1'
     environment 'MEDIA_ROOT', layout.buildDirectory.dir('tmp/media-tests-' + java.util.UUID.randomUUID()).get().asFile.absolutePath
