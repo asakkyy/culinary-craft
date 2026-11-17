@@ -1,29 +1,15 @@
+import AuthForm from '../pages/AuthForm';
 import { useEffect } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, ChefHat, Heart, Plus, ShieldCheck, UserRound, X, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { BookOpen, ChefHat, Heart, Plus, ShieldCheck, UserRound, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 function UserPicker() {
-  const { pickerOpen, setPickerOpen, users, user, pickUser } = useApp();
+  const { pickerOpen, setPickerOpen } = useApp();
   if (!pickerOpen) return null;
-  return (
-    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPickerOpen(false); }}>
-      <div className="user-modal" role="dialog" aria-modal="true" aria-label="Выбор роли">
-        <button className="icon-plain modal-close" onClick={() => setPickerOpen(false)} aria-label="Закрыть"><X size={20} /></button>
-        <div className="modal-kicker">ДЕМОНСТРАЦИОННЫЙ РЕЖИМ</div>
-        <h2>Кем будем сегодня?</h2>
-        <p>Переключай роли, чтобы проверить возможности приложения. Настоящая авторизация появится позже.</p>
-        <div className="user-list">
-          <button className={`user-option ${!user ? 'selected' : ''}`} onClick={() => pickUser('guest')}>
-            <span className="user-avatar guest-avatar"><UserRound size={21} /></span><span><strong>Гость</strong><small>Просмотр каталога без изменений</small></span><ArrowRight size={18} />
-          </button>
-          {users.map((person) => <button key={person.id} className={`user-option ${user?.id === person.id ? 'selected' : ''}`} onClick={() => pickUser(String(person.id))}>
-            <span className={`user-avatar ${person.role === 'ADMIN' ? 'admin-avatar' : ''}`}>{person.initials}</span><span><strong>{person.name} {person.role === 'ADMIN' && '· Админ'}</strong><small>{person.subtitle}</small></span><ArrowRight size={18} />
-          </button>)}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="modal-backdrop"><div className="user-modal" role="dialog" aria-modal="true" aria-label="Account">
+    <button className="icon-plain" onClick={() => setPickerOpen(false)} aria-label="Close"><X/></button><AuthForm/>
+  </div></div>;
 }
 
 export default function Layout({ children }) {

@@ -2,37 +2,35 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { api, errorText } from '../api/client';
 
 const Context = createContext(null);
-const initialUser = localStorage.getItem('cc-demo-user') || '1';
-if (!localStorage.getItem('cc-demo-user')) localStorage.setItem('cc-demo-user', initialUser);
 
 export function AppProvider({ children }) {
-  const [users, setUsers] = useState([]);
-  const [activeId, setActiveId] = useState(initialUser);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [dataVersion, setDataVersion] = useState(0);
 
-  useEffect(() => { api.users().then(setUsers).catch(() => {}); }, []);
+  useEffect(() => { api.me().then(setUser).catch(() => setUser(null)).finally(() => setAuthLoading(false)); }, []);
+  useEffect(() => {
+    const expired = () => { setUser(null); setPickerOpen(true); setDataVersion(v => v + 1); };
+    window.addEventListener('cc-session-expired', expired);
+    return () => window.removeEventListener('cc-session-expired', expired);
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 4200);
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const user = users.find((item) => String(item.id) === activeId) || null;
-  const pickUser = (id) => {
-    localStorage.setItem('cc-demo-user', id);
-    setActiveId(id);
-    setPickerOpen(false);
-    setDataVersion((count) => count + 1);
-  };
+  const login = async (data) => { const account = await api.login(data); setUser(account); setPickerOpen(false); setDataVersion(v => v + 1); };
+  const logout = async () => { try { await api.logout(); } catch (error) { if (error.response?.status !== 401) throw error; } setUser(null); setPickerOpen(false); setDataVersion(v => v + 1); };
   const notify = (message, type = 'success') => setToast({ message, type });
-  const showError = (error) => notify(errorText(error), 'error');
+  const showError = (error) => { if (error.response?.status === 401) { setUser(null); setPickerOpen(true); } notify(errorText(error), 'error'); };
   const changed = () => setDataVersion((count) => count + 1);
   const requireUser = () => { if (!user) { setPickerOpen(true); return false; } return true; };
 
   return (
-    <Context.Provider value={{ users, user, pickUser, pickerOpen, setPickerOpen, toast, notify, showError, changed, dataVersion, requireUser }}>
+    <Context.Provider value={{ user, authLoading, login, logout, pickerOpen, setPickerOpen, toast, notify, showError, changed, dataVersion, requireUser }}>
       {children}
     </Context.Provider>
   );

@@ -1,6 +1,7 @@
 package com.culinarycraft.api;
 
 import static org.hamcrest.Matchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -26,7 +27,7 @@ class RecipeApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     private long createRecipe(String title) throws Exception {
-        String result = mvc.perform(post("/api/recipes").header("X-Demo-User", "1")
+        String result = mvc.perform(post("/api/recipes").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
             .contentType(MediaType.APPLICATION_JSON).content(request(title)))
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"))
             .andReturn().getResponse().getContentAsString();
@@ -65,13 +66,13 @@ class RecipeApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test void guestCannotCreate() throws Exception {
-        mvc.perform(post("/api/recipes").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/recipes").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content(request("Безымянный суп")))
             .andExpect(status().isUnauthorized());
     }
 
     @Test void invalidRecipeReturns400AndFieldMessage() throws Exception {
-        mvc.perform(post("/api/recipes").header("X-Demo-User", "1")
+        mvc.perform(post("/api/recipes").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"title\":\"a\",\"description\":\"b\",\"category\":\"Супы\",\"prepMinutes\":0,\"servings\":0,\"difficulty\":\"Легко\",\"ingredients\":[],\"steps\":[]}"))
             .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").exists());
@@ -80,11 +81,11 @@ class RecipeApiIntegrationTest extends PostgresIntegrationTest {
     @Test void newRecipeIsHiddenUntilModeratorApproves() throws Exception {
         long id = createRecipe("Суп из тестового сценария");
         mvc.perform(get("/api/recipes/" + id)).andExpect(status().isNotFound());
-        mvc.perform(get("/api/recipes/" + id).header("X-Demo-User", "1"))
+        mvc.perform(get("/api/recipes/" + id).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
-        mvc.perform(get("/api/recipes/pending").header("X-Demo-User", "3"))
+        mvc.perform(get("/api/recipes/pending").with(jwt().jwt(j -> j.subject("3").claim("uid", 3L))))
             .andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
-        mvc.perform(post("/api/recipes/" + id + "/moderate").header("X-Demo-User", "3")
+        mvc.perform(post("/api/recipes/" + id + "/moderate").with(csrf()).with(jwt().jwt(j -> j.subject("3").claim("uid", 3L)))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"APPROVED\"}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
         mvc.perform(get("/api/recipes/" + id)).andExpect(status().isOk());
@@ -92,46 +93,46 @@ class RecipeApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test void regularUserCannotModerate() throws Exception {
         long id = createRecipe("Суп для проверки ролей");
-        mvc.perform(post("/api/recipes/" + id + "/moderate").header("X-Demo-User", "2")
+        mvc.perform(post("/api/recipes/" + id + "/moderate").with(csrf()).with(jwt().jwt(j -> j.subject("2").claim("uid", 2L)))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"APPROVED\"}"))
             .andExpect(status().isForbidden());
     }
 
     @Test void ownerCanUpdateButDifferentUserCannot() throws Exception {
         long id = createRecipe("Суп для редактирования");
-        mvc.perform(put("/api/recipes/" + id).header("X-Demo-User", "2")
+        mvc.perform(put("/api/recipes/" + id).with(csrf()).with(jwt().jwt(j -> j.subject("2").claim("uid", 2L)))
                 .contentType(MediaType.APPLICATION_JSON).content(request("Чужое изменение")))
             .andExpect(status().isForbidden());
-        mvc.perform(put("/api/recipes/" + id).header("X-Demo-User", "1")
+        mvc.perform(put("/api/recipes/" + id).with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
                 .contentType(MediaType.APPLICATION_JSON).content(request("Исправленный суп")))
             .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Исправленный суп"));
     }
 
     @Test void ownerCanDeleteCreatedRecipe() throws Exception {
         long id = createRecipe("Удаляемый рецепт");
-        mvc.perform(delete("/api/recipes/" + id).header("X-Demo-User", "1"))
+        mvc.perform(delete("/api/recipes/" + id).with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L))))
             .andExpect(status().isOk());
-        mvc.perform(get("/api/recipes/" + id).header("X-Demo-User", "1"))
+        mvc.perform(get("/api/recipes/" + id).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L))))
             .andExpect(status().isNotFound());
     }
 
     @Test void favoritesAreUserSpecific() throws Exception {
-        mvc.perform(post("/api/recipes/1/favorite").header("X-Demo-User", "1"))
+        mvc.perform(post("/api/recipes/1/favorite").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.favorite").isBoolean());
-        mvc.perform(get("/api/recipes/favorites").header("X-Demo-User", "2"))
+        mvc.perform(get("/api/recipes/favorites").with(jwt().jwt(j -> j.subject("2").claim("uid", 2L))))
             .andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
     }
 
     @Test void reviewValidationAndDuplicateReviewAreChecked() throws Exception {
-        mvc.perform(post("/api/recipes/1/reviews").header("X-Demo-User", "1")
+        mvc.perform(post("/api/recipes/1/reviews").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rating\":9,\"comment\":\"ok\"}"))
             .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/recipes/1/reviews").header("X-Demo-User", "1")
+        mvc.perform(post("/api/recipes/1/reviews").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rating\":4,\"comment\":\"Очень вкусно\"}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.rating").value(4));
-        mvc.perform(post("/api/recipes/1/reviews").header("X-Demo-User", "1")
+        mvc.perform(post("/api/recipes/1/reviews").with(csrf()).with(jwt().jwt(j -> j.subject("1").claim("uid", 1L)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"rating\":5,\"comment\":\"Повторный отзыв\"}"))
             .andExpect(status().isConflict());

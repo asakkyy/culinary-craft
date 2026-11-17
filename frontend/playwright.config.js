@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { randomBytes } from 'node:crypto';
+if (!process.env.E2E_DB_URL) throw new Error('Set E2E_DB_URL to an isolated test database');
+process.env.CC_E2E_ADMIN_PASSWORD ||= randomBytes(24).toString('hex');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -15,15 +18,16 @@ export default defineConfig({
     {
       command: process.platform === 'win32' ? 'gradlew.bat bootRun' : './gradlew bootRun',
       cwd: '../backend',
+      env: { DB_URL: process.env.E2E_DB_URL, JWT_SECRET: randomBytes(48).toString('base64'), COOKIE_SECURE: 'false', BOOTSTRAP_ADMIN: 'true', ADMIN_EMAIL: 'admin@e2e.invalid', ADMIN_PASSWORD: process.env.CC_E2E_ADMIN_PASSWORD },
       url: 'http://127.0.0.1:8080/api/health',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 180000,
     },
     {
       command: 'npm run dev',
       cwd: '.',
       url: 'http://127.0.0.1:5173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120000,
     },
   ],
