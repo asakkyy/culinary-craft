@@ -69,7 +69,7 @@ jobs:
           node-version: '22'
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Prepare report folders
         working-directory: frontend
         run: node scripts/prepare-reports.mjs
@@ -149,7 +149,7 @@ jobs:
         run: chmod +x backend/gradlew
       - name: Install frontend packages
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Install Chromium and Linux browser libraries
         working-directory: frontend
         run: npx playwright install --with-deps chromium
@@ -159,14 +159,13 @@ jobs:
       - name: Test real user flows in browser
         working-directory: frontend
         run: npm run test:e2e
-      - name: Upload browser HTML, JUnit XML, screenshots and traces
+      - name: Upload browser HTML and JUnit XML
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-e2e-report
           path: |
             frontend/playwright-report/
-            frontend/test-results/
             frontend/reports/frontend/tests/playwright-junit.xml
           if-no-files-found: warn
           retention-days: 60

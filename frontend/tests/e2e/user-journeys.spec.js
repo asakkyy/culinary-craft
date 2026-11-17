@@ -65,7 +65,6 @@ test('SQL-пагинация каталога и административна�
   await page.goto('/admin');
   await page.getByRole('link', { name: 'Хранилище', exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: test.info().outputPath('admin-mobile.png'), fullPage: true });
 });
 
 test('CSRF обязателен для входа, повреждённая сессия не даёт доступ', async ({ request }) => {
@@ -97,7 +96,6 @@ test('Жалоба, решение, аудит и блокировка дейс�
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Пожаловаться', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
-  await page.screenshot({ path: test.info().outputPath('report-dialog-1280.png') });
   await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
   await page.getByRole('button', { name: 'Отправить жалобу' }).click();
   await expect(page.locator('.toast')).toHaveText(/Жалоба отправлена/);
@@ -119,7 +117,6 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await admin.getByLabel('Решение', { exact: true }).selectOption('RESOLVED');
     await admin.getByLabel(/Комментарий к жалобе/).fill('Проверено администратором');
     await admin.getByRole('button', { name: 'Сохранить решение' }).click();
-    await admin.screenshot({ path: test.info().outputPath('report-review-1280.png') });
     await admin.getByRole('button', { name: 'Подтвердить решение' }).click();
     await expect(report).toContainText('Закрыта');
     await page.reload();
@@ -134,7 +131,6 @@ test('Жалоба, решение, аудит и блокировка дейс�
     const row = admin.locator('tbody tr').filter({ hasText: email });
     await row.getByRole('button', { name: 'Заблокировать', exact: true }).click();
     await admin.getByLabel(/Причина блокировки/).fill('Нарушение правил, E2E');
-    await admin.screenshot({ path: test.info().outputPath('user-block-dialog-1280.png') });
     await admin.getByRole('dialog').getByRole('button', { name: 'Заблокировать', exact: true }).click();
     await admin.getByRole('button', { name: 'Подтвердить решение' }).click();
     await expect(row.getByRole('button', { name: 'Разблокировать', exact: true })).toBeVisible();

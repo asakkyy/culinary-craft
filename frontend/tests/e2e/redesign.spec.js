@@ -16,7 +16,6 @@ test('Меню аккаунта: клавиатура, закрытие снар
   await menu.focus();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Мой профиль' })).toBeFocused();
-  await page.screenshot({ path: test.info().outputPath('account-menu-1280.png') });
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Настройки', exact: true })).toBeFocused();
   await page.keyboard.press('End');
@@ -77,7 +76,7 @@ test('Таблицы запрашивают фильтры, сортировку
   await expect.poll(async () => page.locator('.table-scroll').getAttribute('aria-busy')).toBe('false');
 });
 
-test('Визуальная проверка всех страниц на 375, 768, 1280 и 1920 px', async ({ page, browser }, testInfo) => {
+test('Адаптивность и доступность страниц на 375, 768, 1280 и 1920 px', async ({ page, browser }) => {
   test.setTimeout(180000);
   const errors = [];
   const accessibility = [];
@@ -103,9 +102,12 @@ test('Визуальная проверка всех страниц на 375, 76
     for (const route of routes) {
       await page.goto(route);
       await expect(page.locator('h1').first()).toBeVisible();
+      if (route === '/profile') {
+        await expect(page.getByRole('link', { name: 'Мои жалобы', exact: true })).toHaveCount(0);
+      }
       await expect(page.getByText('Загружаем записи…', { exact: true })).toHaveCount(0);
       await expect(page.locator('.card-skeleton')).toHaveCount(0);
-      // Full-page capture must load images below the fold as well as the visible lazy images.
+      // Include below-the-fold images in the layout check.
       await page.locator('img[loading="lazy"]').evaluateAll((images) =>
         images.forEach((image) => {
           image.loading = 'eager';
@@ -117,10 +119,6 @@ test('Визуальная проверка всех страниц на 375, 76
         const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
         accessibility.push(...result.violations.map((v) => ({ route, width, id: v.id, nodes: v.nodes.map((n) => n.target) })));
       }
-      await page.screenshot({
-        path: testInfo.outputPath(`after-${route === '/' ? 'catalog' : route.slice(1).replaceAll(/[/?=]/g, '-')}-${width}.png`),
-        fullPage: true,
-      });
     }
   }
   const guest = await browser.newContext({
@@ -147,7 +145,6 @@ test('Визуальная проверка всех страниц на 375, 76
           const result = await new AxeBuilder({ page: p }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
           accessibility.push(...result.violations.map((v) => ({ route, width, id: v.id, nodes: v.nodes.map((n) => n.target) })));
         }
-        await p.screenshot({ path: testInfo.outputPath(`after-${route.slice(1)}-${width}.png`), fullPage: true });
       }
     }
     await p.setViewportSize({ width: 375, height: 812 });

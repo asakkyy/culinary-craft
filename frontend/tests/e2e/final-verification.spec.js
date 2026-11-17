@@ -189,7 +189,7 @@ test('V02 — старый email, logout и одноразовость ссыл�
   }
 });
 
-test('V03 — жалоба без описания, дубликат, отказ, приватность и аудит', async ({ page, browser }, testInfo) => {
+test('V03 — жалоба без описания, дубликат, отказ, приватность и аудит', async ({ page, browser }) => {
   await login(page, people[1].email);
   await page.goto('/recipes/1');
   await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
@@ -220,7 +220,6 @@ test('V03 — жалоба без описания, дубликат, отказ
     expect((await (await p.request.get('/api/recipes/1')).json()).status).toBe('APPROVED');
     const audit = await (await p.request.get('/api/admin/audit?action=REPORT_REJECTED')).json();
     expect(audit.content.some((e) => e.targetId === own.id)).toBe(true);
-    await p.screenshot({ path: testInfo.outputPath('report-rejected.png') });
   } finally {
     await admin.close();
   }
@@ -304,7 +303,7 @@ test('V05 — создание, редактирование, фотографи
   }
 });
 
-test('V06 — сложные состояния, контраст, семантика, меню и диалоги на четырёх ширинах', async ({ page }, testInfo) => {
+test('V06 — сложные состояния, контраст, семантика, меню и диалоги на четырёх ширинах', async ({ page }) => {
   test.setTimeout(120000);
   const runtime = [];
   page.on('pageerror', (e) => runtime.push(e.message));
@@ -320,7 +319,6 @@ test('V06 — сложные состояния, контраст, семант�
         .evaluate((row) => row.getBoundingClientRect().height),
     ).toBeLessThan(300);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`users-long-${width}.png`), fullPage: true });
     const accessibility = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
     expect(accessibility.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))).toEqual([]);
     await page.goto('/admin?section=reports&status=OPEN&sort=createdAt,asc&search=' + marker);
@@ -339,14 +337,13 @@ test('V06 — сложные состояния, контраст, семант�
     }
     await page.getByRole('button', { name: 'Рассмотреть', exact: true }).first().click();
     await page.getByText('Загружаем сведения о рецепте…', { exact: true }).waitFor({ state: 'hidden' });
-    await page.screenshot({ path: testInfo.outputPath(`report-long-${width}.png`) });
     const dialog = page.getByRole('dialog');
     expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     const modalA11y = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
     expect(modalA11y.violations.map((v) => v.id)).toEqual([]);
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: /Меню аккаунта/ }).click();
-    await page.screenshot({ path: testInfo.outputPath(`account-${width}.png`) });
+    await expect(page.getByRole('menu')).toBeVisible();
     await page.keyboard.press('Escape');
     await page.route('**/api/admin/reports?**', (route) =>
       route.fulfill({
@@ -357,7 +354,6 @@ test('V06 — сложные состояния, контраст, семант�
     );
     await page.reload();
     await expect(page.getByRole('alert')).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`error-${width}.png`), fullPage: true });
     await page.unroute('**/api/admin/reports?**');
   }
   await page.goto('/');
@@ -368,7 +364,7 @@ test('V06 — сложные состояния, контраст, семант�
   expect(runtime).toEqual([]);
 });
 
-test('V07 — отсутствие фото, ошибка изображения, пустые таблицы и восстановление после ошибки отзывов', async ({ page }, testInfo) => {
+test('V07 — отсутствие фото, ошибка изображения, пустые таблицы и восстановление после ошибки отзывов', async ({ page }) => {
   await login(page, people[6].email);
   const recipe = await (await page.request.get('/api/recipes/1')).json();
   await page.route('**/api/recipes/1', (route) =>
@@ -383,7 +379,6 @@ test('V07 — отсутствие фото, ошибка изображения
       expect(result.violations.map((violation) => violation.id)).toEqual([]);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`no-photo-${width}.png`), fullPage: true });
   }
   await page.unroute('**/api/recipes/1');
   await page.route('**/api/recipes/1', (route) => route.fulfill({ json: { ...recipe, imageUrl: '/images/intentionally-missing.png' } }));
@@ -404,6 +399,5 @@ test('V07 — отсутствие фото, ошибка изображения
     await page.goto('/admin?section=' + section);
     await expect(page.getByText('Записей не найдено')).toBeVisible();
     await expect(page.locator('.table-pagination')).toContainText('Всего: 0');
-    await page.screenshot({ path: testInfo.outputPath(`empty-${section}-1920.png`), fullPage: true });
   }
 });
