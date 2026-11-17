@@ -47,6 +47,36 @@ class AccountEmailTest extends PostgresIntegrationTest {
         var text = events.stream(AccountEmailService.Mail.class).reduce((first, second) -> second).orElseThrow().text();
         return text.substring(text.indexOf("#token=") + 7).split("\n")[0];
     }
+    @Test void changingEmailInvalidatesOldLinksEvenWhenReturningToTheOriginalAddress() {
+        var user = register(); String oldVerification = token();
+        emails.request(user.email(), "RESET"); String oldReset = token();
+        profiles.email(user.id(), new ProfileService.Email("replacement@example.test", password));
+        profiles.email(user.id(), new ProfileService.Email(user.email(), password));
+        assertFalse(accounts.me(user.id()).emailVerified());
+        assertEquals(0, jdbc.queryForObject("select count(*) from account_email_tokens where user_id = ?", Integer.class, user.id()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.verify(oldVerification));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.reset(new AccountEmailService.Reset(oldReset, password)));
+    }
+    @Test void logoutInvalidatesVerificationAndResetLinks() {
+        var user = register(); String verification = token();
+        emails.request(user.email(), "RESET"); String reset = token();
+        accounts.logout(user.id());
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.verify(verification));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.reset(new AccountEmailService.Reset(reset, password)));
+    }
+    @Test void explicitVerificationRequestsKeepTheDailyLimitAcrossMinuteWindows() {
+        var user = accounts.register(new AccountService.Registration("Author", "daily@example.test", password));
+        var separate = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        separate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        String minuteBucket = AccountEmailService.hash("email-VERIFY:" + user.email());
+        for (int attempt = 1; attempt <= 6; attempt++) {
+            emails.request(user.email(), "VERIFY");
+            assertEquals(Math.min(attempt, 5), events.stream(AccountEmailService.Mail.class).count());
+            // Advance only this minute bucket in the isolated Testcontainers database; retain the daily count.
+            separate.executeWithoutResult(status -> jdbc.update(
+                "update authentication_limits set window_start = current_timestamp - interval '2 minutes' where bucket = ?", minuteBucket));
+        }
+    }
     @Test void secretDtosDoNotDisclosePasswordsOrTokensInDebugMessages() {
         assertEquals("Registration[redacted]", new AccountService.Registration("Author", "mail@example.test", password).toString());
         assertEquals("Login[redacted]", new AccountService.Login("mail@example.test", password).toString());

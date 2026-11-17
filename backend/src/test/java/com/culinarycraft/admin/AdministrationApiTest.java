@@ -104,6 +104,42 @@ class AdministrationApiTest extends PostgresIntegrationTest {
         mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("sort", "passwordHash,asc")).andExpect(status().isBadRequest());
         mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("role", "SUPERUSER")).andExpect(status().isBadRequest());
     }
+    @Test void unverifiedAdministratorsCannotMutateCommunityData() throws Exception {
+        var admin = create("changed-address@example.test", "ADMIN");
+        admin.changeEmail("unverified-address@example.test"); users.flush();
+        for (String path : java.util.List.of("/api/admin/recipes/1/unpublish", "/api/admin/users/1/block", "/api/admin/users/1/unblock",
+            "/api/admin/reports/1/decision", "/api/admin/media/cleanup")) {
+            mvc.perform(post(path).cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        }
+    }
+    @Test void databasePaginationFiltersSortingAndTotalsCoverAllRowSizes() throws Exception {
+        var admin = create("pagination-admin@example.test", "ADMIN");
+        String hash = passwords.encode(password);
+        for (int i = 0; i < 23; i++) {
+            var person = DemoUserEntity.account(String.format("Pagination %02d", i), "page" + i + "@example.test", hash, "USER");
+            person.verifyEmail(); users.saveAndFlush(person);
+            long reportId = service.report(person.getId(), 1, new AdministrationService.ReportInput(RecipeReport.Reason.OTHER, "")).id();
+            service.decide(admin.getId(), reportId, new AdministrationService.Decision(RecipeReport.Status.RESOLVED, "Проверено"));
+        }
+        for (int size : new int[]{10, 20, 50}) {
+            mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("search", "Pagination ").param("role", "USER")
+                .param("status", "ACTIVE").param("sort", "name,asc").param("size", String.valueOf(size)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(23))
+                .andExpect(jsonPath("$.content.length()").value(Math.min(size, 23)))
+                .andExpect(jsonPath("$.content[0].name").value("Pagination 00"));
+            mvc.perform(get("/api/admin/reports").cookie(cookie(admin)).param("status", "RESOLVED").param("sort", "id,asc")
+                .param("search", "Pagination ").param("size", String.valueOf(size)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(23))
+                .andExpect(jsonPath("$.content.length()").value(Math.min(size, 23)));
+            mvc.perform(get("/api/admin/audit").cookie(cookie(admin)).param("action", "REPORT_RESOLVED").param("size", String.valueOf(size)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(23))
+                .andExpect(jsonPath("$.content.length()").value(Math.min(size, 23)));
+        }
+        mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("search", "Pagination ").param("sort", "name,asc").param("role", "USER")
+            .param("size", "10").param("page", "2")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(3)).andExpect(jsonPath("$.content[0].name").value("Pagination 20"));
+    }
     @Test void unpublishingIsProtectedAuditedAndPreservesTheRecipe() throws Exception {
         var admin = create("publisher@example.test", "ADMIN"); var owner = create("reader@example.test", "USER");
         mvc.perform(post("/api/admin/recipes/1/unpublish").cookie(cookie(owner)).with(csrf()).contentType(MediaType.APPLICATION_JSON)

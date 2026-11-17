@@ -78,16 +78,18 @@ class MediaCleanupTest extends PostgresIntegrationTest {
         assertEquals(503, error.getStatusCode().value()); assertFalse(error.getReason().contains(ROOT));
     }
     @Test void cleanupEndpointRequiresAdministratorAndExplicitMode() throws Exception {
+        var administrator = com.culinarycraft.persistence.DemoUserEntity.account("Cleanup admin", "cleanup-admin@test.invalid", "unusable-fixture-hash", "ADMIN");
+        administrator.verifyEmail(); users.saveAndFlush(administrator);
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/media/cleanup")
             .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
             .contentType("application/json").content("{\"dryRun\":true}"))
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
-        for (long id : new long[] {1, 3}) {
+        for (long id : new long[] {1, administrator.getId()}) {
             mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/media/cleanup")
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt().jwt(j -> j.subject("" + id).claim("uid", id)))
                 .contentType("application/json").content("{\"dryRun\":true}"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().is(id == 3 ? 200 : 403));
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().is(id == administrator.getId() ? 200 : 403));
         }
     }
     @Test @Transactional(propagation = Propagation.NOT_SUPPORTED)

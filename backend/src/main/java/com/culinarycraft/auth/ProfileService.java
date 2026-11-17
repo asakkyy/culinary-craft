@@ -24,7 +24,10 @@ public class ProfileService {
     }
     private final DemoUserRepository users;
     private final PasswordEncoder passwords;
-    public ProfileService(DemoUserRepository users, PasswordEncoder passwords) { this.users = users; this.passwords = passwords; }
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    public ProfileService(DemoUserRepository users, PasswordEncoder passwords, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.users = users; this.passwords = passwords; this.jdbc = jdbc;
+    }
     private DemoUserEntity account(long id) {
         var user = users.lockById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (!"ACTIVE".equals(user.getStatus())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Аккаунт недоступен");
@@ -46,6 +49,10 @@ public class ProfileService {
         var existing = users.findByEmailIgnoreCase(email);
         if (existing.isPresent() && !existing.get().getId().equals(id)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email уже используется");
+        }
+        if (!email.equals(user.getEmail())) {
+            // Invalidate links permanently, including if the user later returns to the old address.
+            jdbc.update("delete from account_email_tokens where user_id = ?", id);
         }
         user.changeEmail(email);
         try { users.flush(); } catch (org.springframework.dao.DataIntegrityViolationException error) {
