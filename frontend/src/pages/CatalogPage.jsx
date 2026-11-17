@@ -37,7 +37,7 @@ export default function CatalogPage() {
       if (!val || val === 'Все рецепты' || (key === 'sort' && val === 'popular')) next.delete(key);
       else next.set(key, String(val));
     }
-    setParams(next, { preventScrollReset: true });
+    setParams(next, { preventScrollReset: true, flushSync: true });
   };
   useEffect(() => {
     setInput(search);
@@ -186,7 +186,7 @@ export default function CatalogPage() {
         <div className="results-header" aria-live="polite">
           <strong>{loading ? 'Загружаем рецепты…' : `Найдено ${data.total} рецептов`}</strong>
           {(search || category !== 'Все рецепты') && (
-            <button className="btn btn-text" onClick={() => setParams({})}>
+            <button className="btn btn-text" onClick={() => setParams({}, { flushSync: true })}>
               Сбросить фильтры
             </button>
           )}
@@ -223,7 +223,7 @@ export default function CatalogPage() {
                   className="btn btn-primary"
                   onClick={() => {
                     setInput('');
-                    setParams({});
+                    setParams({}, { flushSync: true });
                   }}
                 >
                   Сбросить фильтры

@@ -41,17 +41,22 @@ async function verifyMailbox(page, email) {
 
 test('SQL-пагинация каталога и административная форма на мобильном экране', async ({ page }) => {
   await page.goto('/');
+  const firstResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/recipes' && url.searchParams.get('sort') === 'quick' && url.searchParams.get('size') === '6';
+  });
   await page.getByLabel('Сортировка:').selectOption('quick');
   await expect(page).toHaveURL(/sort=quick/);
   const cards = page.locator('.catalog-section .recipe-card a[aria-label^="Открыть рецепт:"]');
-  await expect(cards).toHaveCount(6);
-  const first = await cards.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+  const first = (await (await firstResponse).json()).content.map(({ id }) => `/recipes/${id}`);
+  expect(first).toHaveLength(6);
+  await expect.poll(() => cards.evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual(first);
   await page.getByRole('button', { name: 'Далее', exact: true }).click();
   await expect(page).toHaveURL(/page=1/);
-  await expect(page.locator('.card-skeleton')).toHaveCount(0);
-  const second = await cards.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
-  expect(second.length).toBeGreaterThan(0);
-  expect(second.every((link) => !first.includes(link))).toBe(true);
+  await expect.poll(async () => {
+    const second = await cards.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    return second.length > 0 && second.every((link) => !first.includes(link));
+  }).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/forgot-password');
   await page.getByLabel('Email аккаунта').focus();

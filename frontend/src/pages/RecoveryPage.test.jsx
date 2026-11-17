@@ -26,6 +26,39 @@ it('запрашивает восстановление и показывает 
   expect(api.requestPassword).toHaveBeenCalledWith({ email: 'author@example.test' });
   expect(await screen.findByRole('status')).toHaveTextContent('Если адрес подходит');
 });
+it('ждёт первичную загрузку сессии перед автозаполнением формы восстановления', () => {
+  useApp.mockReturnValue({ authLoading: true });
+  const view = render(
+    <MemoryRouter>
+      <RecoveryPage mode="forgot" />
+    </MemoryRouter>,
+  );
+  expect(screen.queryByLabelText('Email аккаунта')).not.toBeInTheDocument();
+  useApp.mockReturnValue({ user: { email: 'author@example.test' }, authLoading: false });
+  view.rerender(
+    <MemoryRouter>
+      <RecoveryPage mode="forgot" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByLabelText('Email аккаунта')).toHaveValue('author@example.test');
+});
+
+it('сохраняет введённый email после обновления сессии', async () => {
+  useApp.mockReturnValue({ user: null });
+  const view = render(
+    <MemoryRouter>
+      <RecoveryPage mode="forgot" />
+    </MemoryRouter>,
+  );
+  await userEvent.type(screen.getByLabelText('Email аккаунта'), 'other@example.test');
+  useApp.mockReturnValue({ user: { email: 'author@example.test' } });
+  view.rerender(
+    <MemoryRouter>
+      <RecoveryPage mode="forgot" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByLabelText('Email аккаунта')).toHaveValue('other@example.test');
+});
 it('подтверждает email только после явного нажатия и удаляет токен из URL', async () => {
   window.history.replaceState(null, '', '/verify-email#token=secret');
   renderPage(<RecoveryPage mode="verify" />);

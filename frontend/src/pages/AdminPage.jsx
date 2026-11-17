@@ -1,4 +1,4 @@
-import { createElement, useCallback, useEffect, useState } from 'react';
+import { createElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ClipboardList, Users, ScrollText, BookOpen, HardDrive, LayoutDashboard, ExternalLink } from 'lucide-react';
 import { api, errorText } from '../api/client';
@@ -44,6 +44,10 @@ const detail = (item) =>
 export default function AdminPage() {
   const { user, notify } = useApp();
   const [params, setParams] = useSearchParams();
+  const pendingFilters = useRef(null);
+  useLayoutEffect(() => {
+    pendingFilters.current = null;
+  }, [params]);
   const tab = Object.hasOwn(sections, params.get('section')) ? params.get('section') : 'reports';
   const status = params.get(tab === 'audit' ? 'action' : 'status') || '';
   const role = params.get('role') || '';
@@ -53,11 +57,13 @@ export default function AdminPage() {
   const size = [10, 20, 50].includes(Number(params.get('size'))) ? Number(params.get('size')) : 10;
   const updateFilters = useCallback(
     (patch, replace = false) => {
-      const next = new URLSearchParams(params);
+      // Preserve earlier filter events when the router has yet to render their URL.
+      const next = new URLSearchParams(pendingFilters.current ?? params);
       for (const [key, value] of Object.entries(patch)) {
         if (value === '' || value === 0) next.delete(key);
         else next.set(key, String(value));
       }
+      pendingFilters.current = next;
       setParams(next, { replace });
     },
     [params, setParams],
