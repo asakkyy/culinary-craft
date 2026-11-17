@@ -1,4 +1,27 @@
 import { test, expect } from '@playwright/test';
+test('Настройки профиля и смена пароля с повторным входом', async ({ page }) => {
+  const email = `settings${Date.now()}@e2e.invalid`;
+  await page.goto('/register');
+  await page.getByLabel('Имя', { exact: true }).fill('Автор настроек');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Current password 123');
+  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await page.goto('/settings');
+  await page.getByLabel('Отображаемое имя').fill('Обновлённый автор');
+  await page.getByRole('button', { name: 'Сохранить имя' }).click();
+  await expect(page.getByRole('status')).toHaveText(/Изменения сохранены/);
+  await page.reload();
+  await expect(page.getByLabel('Отображаемое имя')).toHaveValue('Обновлённый автор');
+  await page.getByLabel('Текущий пароль', { exact: true }).fill('Current password 123');
+  await page.getByLabel('Новый пароль', { exact: true }).fill('Changed password 456');
+  await page.getByRole('button', { name: 'Изменить пароль' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Changed password 456');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+});
 test('Гость открывает каталог и рецепт', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Поиск рецептов' }).fill('паста');

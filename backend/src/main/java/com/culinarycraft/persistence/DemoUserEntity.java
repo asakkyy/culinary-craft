@@ -41,6 +41,12 @@ public class DemoUserEntity {
     public java.time.Instant getRegisteredAt() { return registeredAt; }
     public java.time.Instant getUpdatedAt() { return updatedAt; }
     public String getAvatarUrl() { return avatarUrl; }
+    public void rename(String value) {
+        name = value; initials = value.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
+        updatedAt = java.time.Instant.now();
+    }
+    public void changeEmail(String value) { email = value; updatedAt = java.time.Instant.now(); }
+    public void changePassword(String hash) { passwordHash = hash; revokeTokens(); updatedAt = java.time.Instant.now(); }
 
     public DemoUser toModel() { return new DemoUser(id, name, role, initials, subtitle); }
 }

@@ -23,6 +23,9 @@ export function errorText(error) {
 }
 
 export const api = {
+  profileName: data => http.put('/account/profile', data).then(r => r.data),
+  profileEmail: data => http.put('/account/email', data).then(r => r.data),
+  profilePassword: data => http.put('/account/password', data),
   me: () => http.get('/auth/me').then(r => r.data),
   login: (data) => http.post('/auth/login', data).then(r => r.data),
   register: (data) => http.post('/auth/register', data).then(r => r.data),

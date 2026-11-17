@@ -1,5 +1,6 @@
 import { Routes, Route, Link } from 'react-router-dom';
 import Layout from './components/Layout';
+import SettingsPage from './pages/SettingsPage';
 import AuthForm from './pages/AuthForm';
 import RequireAccount from './components/RequireAccount';
 import CatalogPage from './pages/CatalogPage';
@@ -10,6 +11,7 @@ import ModerationPage from './pages/ModerationPage';
 
 export default function App() {
   return <Layout><Routes>
+    <Route path="/settings" element={<RequireAccount><SettingsPage/></RequireAccount>}/>
     <Route path="/login" element={<AuthForm/>}/>
     <Route path="/register" element={<AuthForm register/>}/>
     <Route path="/" element={<CatalogPage/>}/>
