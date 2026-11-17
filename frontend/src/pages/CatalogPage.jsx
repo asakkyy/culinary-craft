@@ -22,6 +22,8 @@ export default function CatalogPage() {
   const sort = params.get('sort') || 'popular';
   const page = Math.max(0, Number(params.get('page')) || 0);
   const search = params.get('search') || '';
+  const visiblePages = [...new Set([0, page - 1, page, page + 1, data.totalPages - 1])]
+    .filter(value => value >= 0 && value < data.totalPages).sort((a, b) => a - b);
   const changeParams = (patch) => {
     const next = new URLSearchParams(params);
     for (const [key, val] of Object.entries(patch)) {
@@ -66,11 +68,11 @@ export default function CatalogPage() {
         <div className="sort-control"><SlidersHorizontal size={17}/><label htmlFor="recipe-sort">Сортировка:</label><select id="recipe-sort" value={sort} onChange={(e) => changeParams({ sort: e.target.value, page: '' })}><option value="popular">Популярные</option><option value="newest">Сначала новые</option><option value="rating">По рейтингу</option><option value="quick">Быстрые</option></select></div>
       </div>
       <div className="results-header"><strong>{loading ? 'Загружаем рецепты…' : `Найдено ${data.total} рецептов`}</strong><span>Листай ниже за вкусными идеями <ArrowDown size={16}/></span></div>
-      {error && <div className="error-box"><strong>Не удалось загрузить рецепты</strong><p>{error}</p><small>Проверь, что Spring Boot запущен, затем обнови страницу.</small></div>}
+      {error && <div className="error-box" role="alert"><strong>Не удалось загрузить рецепты</strong><p>{error}</p><small>Проверь, что Spring Boot запущен, затем обнови страницу.</small></div>}
       {!error && (loading ? <div className="recipe-grid">{Array.from({ length: 6 }, (_, i) => <div className="card-skeleton" key={i}/>)}</div> : data.content.length ?
         <div className="recipe-grid">{data.content.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe}/>)}</div> :
         <div className="empty-state"><span>🔎</span><h3>Пока ничего не нашли</h3><p>Попробуй другую категорию или более короткий запрос.</p><button className="btn btn-primary" onClick={() => { setInput(''); setParams({}); }}>Сбросить фильтры</button></div>)}
-      {!error && data.totalPages > 1 && <div className="pagination"><button disabled={page === 0} onClick={() => changeParams({ page: page - 1 || '' })}>Назад</button>{Array.from({ length: data.totalPages }, (_, i) => <button key={i} className={page === i ? 'active' : ''} onClick={() => changeParams({ page: i || '' })}>{i + 1}</button>)}<button disabled={page >= data.totalPages - 1} onClick={() => changeParams({ page: page + 1 })}>Далее</button></div>}
+      {!error && data.totalPages > 1 && <nav className="pagination" aria-label="Страницы каталога"><button disabled={loading || page === 0} onClick={() => changeParams({ page: page - 1 || '' })}>Назад</button>{visiblePages.map(i => <button key={i} aria-current={page === i ? 'page' : undefined} className={page === i ? 'active' : ''} disabled={loading} onClick={() => changeParams({ page: i || '' })}>{i + 1}</button>)}<button disabled={loading || page >= data.totalPages - 1} onClick={() => changeParams({ page: page + 1 })}>Далее</button></nav>}
     </section>
     <section className="bottom-banner"><div className="container banner-inner"><div className="banner-emoji">👩🏻‍🍳</div><div><div className="eyebrow light">ТВОЯ ИСТОРИЯ ВКУСА</div><h2>Есть рецепт, который <em>все обожают?</em></h2><p>Сохрани его здесь и подари другим немного своего вдохновения.</p></div><Link to="/create" className="btn btn-light">Добавить рецепт <ArrowUpRight size={19}/></Link></div></section>
   </>;

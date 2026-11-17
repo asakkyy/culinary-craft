@@ -24,16 +24,19 @@ public class RecipeEntity {
     @Column(nullable = false) private Instant createdAt;
 
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_ingredients", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")
     private List<String> ingredients = new ArrayList<>();
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_steps", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")
     private List<String> steps = new ArrayList<>();
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_tags", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")

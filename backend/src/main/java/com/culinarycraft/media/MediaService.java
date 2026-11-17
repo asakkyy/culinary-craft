@@ -31,13 +31,20 @@ public class MediaService {
     private void remove(List<MediaFile> old) {
         files.deleteAll(old); files.flush();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { old.forEach(file -> { if (!references.used(file.getId())) storage.delete(file.getId()); }); }
+            @Override public void afterCommit() {
+                for (var file : old) {
+                    try { if (!references.used(file.getId())) storage.delete(file.getId()); }
+                    catch (org.springframework.dao.DataAccessException error) {
+                        org.slf4j.LoggerFactory.getLogger(getClass()).warn("Deferred media cleanup requires a healthy database");
+                    }
+                }
+            }
         });
     }
     private MediaFile store(MultipartFile upload, long owner, Long recipe, String kind) {
         var image = storage.write(upload);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) storage.delete(image.id()); }
+            @Override public void afterCompletion(int status) { if (status == STATUS_ROLLED_BACK) storage.delete(image.id()); }
         });
         return files.saveAndFlush(new MediaFile(image.id(), owner, recipe, kind, image.bytes(), image.width(), image.height()));
     }
@@ -48,7 +55,7 @@ public class MediaService {
         // Validate and write before touching the old reference.
         var image = storage.write(upload);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCompletion(int status) { if (status != STATUS_COMMITTED) storage.delete(image.id()); }
+            @Override public void afterCompletion(int status) { if (status == STATUS_ROLLED_BACK) storage.delete(image.id()); }
         });
         remove(old);
         var file = files.saveAndFlush(new MediaFile(image.id(), userId, null, "AVATAR", image.bytes(), image.width(), image.height()));

@@ -44,6 +44,11 @@ public class AdministrationService {
         String name = users.findById(report.getReporterId()).orElseThrow().toModel().name();
         return report.view(name, admin);
     }
+    private PageView<RecipeReport.View> views(Page<RecipeReport> page, boolean administrator) {
+        var names = users.findAllById(page.getContent().stream().map(RecipeReport::getReporterId).distinct().toList())
+            .stream().collect(java.util.stream.Collectors.toMap(DemoUserEntity::getId, user -> user.toModel().name()));
+        return PageView.of(page.map(report -> report.view(names.get(report.getReporterId()), administrator)));
+    }
     public RecipeReport.View report(long actor, long recipeId, ReportInput input) {
         if (input.description().strip().length() < 10) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Опишите проблему подробнее");
         users.lockById(actor).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED)); active(actor);
@@ -57,7 +62,7 @@ public class AdministrationService {
         return view(reports.saveAndFlush(new RecipeReport(actor, recipeId, recipe.title(), input.reason(), input.description().strip())), false);
     }
     @Transactional(readOnly = true) public PageView<RecipeReport.View> mine(long actor, int page, int size) {
-        active(actor); return PageView.of(reports.findByReporterId(actor, page(page, size, "createdAt")).map(r -> view(r, false)));
+        active(actor); return views(reports.findByReporterId(actor, page(page, size, "createdAt")), false);
     }
     @Transactional(readOnly = true) public RecipeReport.View mineOne(long actor, long id) {
         active(actor); var report = reports.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -65,7 +70,7 @@ public class AdministrationService {
         return view(report, false);
     }
     @Transactional(readOnly = true) public PageView<RecipeReport.View> queue(long actor, RecipeReport.Status status, String search, int page, int size) {
-        admin(actor); return PageView.of(reports.search(status, "%" + search.strip().toLowerCase(Locale.ROOT) + "%", page(page, size, "createdAt")).map(r -> view(r, true)));
+        admin(actor); return views(reports.search(status, "%" + search.strip().toLowerCase(Locale.ROOT) + "%", page(page, size, "createdAt")), true);
     }
     public RecipeReport.View decide(long actor, long id, Decision input) {
         admin(actor);

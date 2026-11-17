@@ -20,6 +20,28 @@ async function verifyMailbox(page, email) {
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
 }
 
+test('SQL-пагинация каталога и административная форма на мобильном экране', async ({ page }) => {
+  await page.goto('/'); await page.getByLabel('Сортировка:').selectOption('quick');
+  await expect(page).toHaveURL(/sort=quick/);
+  const cards = page.locator('.recipe-card a[aria-label^="Открыть рецепт:"]');
+  await expect(cards).toHaveCount(6);
+  const first = await cards.evaluateAll(links => links.map(link => link.getAttribute('href')));
+  await page.getByRole('button', { name: 'Далее', exact: true }).click();
+  await expect(page).toHaveURL(/page=1/); await expect(page.locator('.card-skeleton')).toHaveCount(0);
+  const second = await cards.evaluateAll(links => links.map(link => link.getAttribute('href')));
+  expect(second.length).toBeGreaterThan(0); expect(second.every(link => !first.includes(link))).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/forgot-password'); await page.getByLabel('Email аккаунта').focus(); await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Отправить письмо' })).toBeFocused();
+  await page.goto('/login'); await page.getByLabel('Email', { exact: true }).fill('admin@e2e.invalid');
+  await page.getByLabel('Пароль', { exact: true }).fill(process.env.CC_E2E_ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await page.goto('/admin'); await page.getByRole('button', { name: 'Хранилище', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('admin-mobile.png'), fullPage: true });
+});
+
 test('CSRF обязателен для входа, повреждённая сессия не даёт доступ', async ({ request }) => {
   const csrf = await request.get('/api/auth/csrf');
   expect(csrf.headers()['set-cookie']).toContain('SameSite=Strict');

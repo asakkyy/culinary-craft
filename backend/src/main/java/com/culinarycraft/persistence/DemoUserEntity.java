@@ -4,6 +4,7 @@ import com.culinarycraft.model.DemoUser;
 import jakarta.persistence.*;
 
 @Entity
+@org.hibernate.annotations.BatchSize(size = 50)
 @Table(name = "demo_users")
 public class DemoUserEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
