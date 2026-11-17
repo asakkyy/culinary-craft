@@ -1,4 +1,56 @@
 import { test, expect } from '@playwright/test';
+
+async function mailLink(request, email, path) {
+  const base = process.env.E2E_MAILPIT_URL || 'http://127.0.0.1:8025';
+  let id;
+  await expect.poll(async () => {
+    const data = await (await request.get(`${base}/api/v1/messages`)).json();
+    id = data.messages.find(message => message.To.some(recipient => recipient.Address === email)
+      && (path === 'verify-email' ? message.Subject.includes('email') : message.Subject.includes('пароля')))?.ID;
+    return Boolean(id);
+  }, { timeout: 15000 }).toBe(true);
+  const message = await (await request.get(`${base}/api/v1/message/${id}`)).json();
+  return message.Text.match(new RegExp(`http://127\\.0\\.0\\.1:5173/${path}#token=[A-Za-z0-9_-]+`))[0];
+}
+async function verifyMailbox(page, email) {
+  await page.goto(await mailLink(page.request, email, 'verify-email'));
+  await page.getByRole('button', { name: 'Подтвердить email', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Email подтверждён');
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+}
+
+test('SQL-пагинация каталога и административная форма на мобильном экране', async ({ page }) => {
+  await page.goto('/'); await page.getByLabel('Сортировка:').selectOption('quick');
+  await expect(page).toHaveURL(/sort=quick/);
+  const cards = page.locator('.recipe-card a[aria-label^="Открыть рецепт:"]');
+  await expect(cards).toHaveCount(6);
+  const first = await cards.evaluateAll(links => links.map(link => link.getAttribute('href')));
+  await page.getByRole('button', { name: 'Далее', exact: true }).click();
+  await expect(page).toHaveURL(/page=1/); await expect(page.locator('.card-skeleton')).toHaveCount(0);
+  const second = await cards.evaluateAll(links => links.map(link => link.getAttribute('href')));
+  expect(second.length).toBeGreaterThan(0); expect(second.every(link => !first.includes(link))).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/forgot-password'); await page.getByLabel('Email аккаунта').focus(); await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Отправить письмо' })).toBeFocused();
+  await page.goto('/login'); await page.getByLabel('Email', { exact: true }).fill('admin@e2e.invalid');
+  await page.getByLabel('Пароль', { exact: true }).fill(process.env.CC_E2E_ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await page.goto('/admin'); await page.getByRole('button', { name: 'Хранилище', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('admin-mobile.png'), fullPage: true });
+});
+
+test('CSRF обязателен для входа, повреждённая сессия не даёт доступ', async ({ request }) => {
+  const csrf = await request.get('/api/auth/csrf');
+  expect(csrf.headers()['set-cookie']).toContain('SameSite=Strict');
+  expect(csrf.headers()['set-cookie']).toContain('HttpOnly');
+  expect((await request.post('/api/auth/login', { data: { email: 'nobody@e2e.invalid', password: 'wrong' } })).status()).toBe(403);
+  const response = await request.get('/api/auth/me', { headers: { Cookie: 'cc-session=broken' } });
+  expect(response.status()).toBe(401);
+  expect(await response.json()).toEqual({ message: 'Session expired, please sign in again' });
+});
 test('Жалоба, решение, аудит и блокировка действующей сессии', async ({ page, browser }) => {
   const suffix = Date.now(); const email = `reporter${suffix}@e2e.invalid`;
   await page.goto('/register');
@@ -7,6 +59,7 @@ test('Жалоба, решение, аудит и блокировка дейс�
   await page.getByLabel('Пароль', { exact: true }).fill('Report password 12345');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await verifyMailbox(page, email);
   await page.goto('/recipes/1');
   await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
   await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
@@ -30,6 +83,9 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await page.reload(); await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
     await admin.getByRole('button', { name: 'Аудит', exact: true }).click();
     await expect(admin.getByText('REPORT_RESOLVED', { exact: true })).toBeVisible();
+    await admin.getByRole('button', { name: 'Хранилище', exact: true }).click();
+    await admin.getByRole('button', { name: 'Проверить без удаления' }).click();
+    await expect(admin.getByRole('status').filter({ hasText: 'Режим:' })).toContainText('Режим: без удаления');
     await admin.getByRole('button', { name: 'Пользователи', exact: true }).click();
     await admin.getByRole('textbox', { name: 'Административный поиск' }).fill(email);
     const row = admin.locator('article').filter({ hasText: email });
@@ -60,6 +116,7 @@ test('Настройки профиля и смена пароля с повто
   await page.getByLabel('Пароль', { exact: true }).fill('Current password 123');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await verifyMailbox(page, email);
   await page.goto('/settings');
   await page.getByLabel('Аватар', { exact: true }).setInputFiles(await image(page));
   await expect(page.locator('.user-chip img')).toBeVisible();
@@ -94,12 +151,14 @@ test('Демо-заголовок не открывает личные данн�
 });
 test('Регистрация, восстановление сессии, рецепт и модерация', async ({ page }) => {
   const suffix = Date.now(); const title = `Суп браузер ${suffix}`;
+  const email = `author${suffix}@e2e.invalid`;
   await page.goto('/register');
   await page.getByLabel('Имя', { exact: true }).fill('Новый автор');
-  await page.getByLabel('Email', { exact: true }).fill(`author${suffix}@e2e.invalid`);
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Пароль', { exact: true }).fill('E2E long password 12345');
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await verifyMailbox(page, email);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
   await page.goto('/create');
@@ -129,4 +188,29 @@ test('Регистрация, восстановление сессии, рец�
   await page.getByRole('textbox', { name: 'Поиск рецептов' }).fill(title);
   await page.getByRole('button', { name: /^Найти/ }).click();
   await expect(page.locator('.recipe-card').filter({ hasText: title })).toBeVisible();
+});
+
+test('Письмо восстановления меняет пароль и отзывает старую сессию', async ({ page }) => {
+  const email = `recover${Date.now()}@e2e.invalid`;
+  await page.goto('/register');
+  await page.getByLabel('Имя', { exact: true }).fill('Автор восстановления');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Original password 12345');
+  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  expect((await page.request.post('/api/recipes/1/favorite')).status()).toBe(403);
+  await verifyMailbox(page, email);
+  await page.goto('/forgot-password'); await page.getByLabel('Email аккаунта').fill(email);
+  await page.getByRole('button', { name: 'Отправить письмо' }).click();
+  await expect(page.getByRole('status')).toContainText('письмо будет отправлено');
+  await page.goto(await mailLink(page.request, email, 'reset-password'));
+  await page.getByLabel('Новый пароль', { exact: true }).fill('Recovered password 45678');
+  await page.getByRole('button', { name: 'Сохранить новый пароль' }).click();
+  await expect(page.getByRole('status')).toContainText('Старые сессии отозваны');
+  expect((await page.request.get('/api/auth/me')).status()).toBe(401);
+  await page.getByRole('link', { name: 'Вход', exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Recovered password 45678');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
 });

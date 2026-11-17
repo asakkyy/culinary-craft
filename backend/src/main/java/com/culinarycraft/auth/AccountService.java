@@ -14,15 +14,21 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountService {
     public record Registration(@NotBlank @Size(min = 2, max = 80) String name,
         @NotBlank @Email @Size(max = 254) String email,
-        @NotBlank @Size(min = 12, max = 64) String password) {}
+        @NotBlank @Size(min = 12, max = 64) String password) {
+        @Override public String toString() { return "Registration[redacted]"; }
+    }
     public record Login(@NotBlank @Email @Size(max = 254) String email,
-                        @NotBlank @Size(max = 64) String password) {}
+                        @NotBlank @Size(max = 64) String password) {
+        @Override public String toString() { return "Login[redacted]"; }
+    }
     private final DemoUserRepository users;
     private final PasswordEncoder passwords;
     private final String dummyHash;
+    private final AccountEmailService emails;
 
-    public AccountService(DemoUserRepository users, PasswordEncoder passwords) {
+    public AccountService(DemoUserRepository users, PasswordEncoder passwords, AccountEmailService emails) {
         this.users = users; this.passwords = passwords;
+        this.emails = emails;
         dummyHash = passwords.encode(java.util.UUID.randomUUID().toString());
     }
     public AccountView register(Registration request) {
@@ -30,12 +36,14 @@ public class AccountService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid name or password length");
         }
         String email = request.email().strip().toLowerCase(Locale.ROOT);
+        String hash = passwords.encode(request.password());
         if (users.findByEmailIgnoreCase(email).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
         try {
-            return AccountView.of(users.saveAndFlush(DemoUserEntity.account(request.name().strip(), email,
-                passwords.encode(request.password()), "USER")));
+            var account = users.saveAndFlush(DemoUserEntity.account(request.name().strip(), email, hash, "USER"));
+            emails.verification(account.getId());
+            return AccountView.of(account);
         } catch (org.springframework.dao.DataIntegrityViolationException error) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }

@@ -4,6 +4,7 @@ import com.culinarycraft.model.DemoUser;
 import jakarta.persistence.*;
 
 @Entity
+@org.hibernate.annotations.BatchSize(size = 50)
 @Table(name = "demo_users")
 public class DemoUserEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
@@ -23,6 +24,9 @@ public class DemoUserEntity {
     private long tokenVersion;
     @Column(length = 500) private String blockReason;
     private java.time.Instant blockedAt;
+    private java.time.Instant emailVerifiedAt;
+    public boolean isEmailVerified() { return emailVerifiedAt != null; }
+    public void verifyEmail() { emailVerifiedAt = java.time.Instant.now(); updatedAt = emailVerifiedAt; }
 
     public static DemoUserEntity account(String name, String email, String hash, String role) {
         var account = new DemoUserEntity();
@@ -31,6 +35,7 @@ public class DemoUserEntity {
         account.initials = name.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
         account.subtitle = ""; account.registeredAt = java.time.Instant.now();
         account.updatedAt = account.registeredAt;
+        if ("ADMIN".equals(role)) account.verifyEmail();
         return account;
     }
     public Long getId() { return id; }
@@ -47,7 +52,7 @@ public class DemoUserEntity {
         name = value; initials = value.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
         updatedAt = java.time.Instant.now();
     }
-    public void changeEmail(String value) { email = value; updatedAt = java.time.Instant.now(); }
+    public void changeEmail(String value) { if (!value.equals(email)) emailVerifiedAt = null; email = value; updatedAt = java.time.Instant.now(); }
     public void changePassword(String hash) { passwordHash = hash; revokeTokens(); updatedAt = java.time.Instant.now(); }
     public void avatar(String url) { avatarUrl = url; updatedAt = java.time.Instant.now(); }
     public String getBlockReason() { return blockReason; }

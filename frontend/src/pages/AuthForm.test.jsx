@@ -31,3 +31,12 @@ it('выполняет выход', async () => {
   await userEvent.setup().click(screen.getByRole('button', { name: 'Выйти' }));
   expect(logout).toHaveBeenCalled();
 });
+it('показывает ограничение попыток и возвращает кнопку в рабочее состояние', async () => {
+  login.mockRejectedValueOnce(new Error('Слишком много попыток входа. Повторите через 10 минут'));
+  renderPage(<AuthForm/>); const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Email'), 'author@example.test');
+  await user.type(screen.getByLabelText('Пароль'), 'incorrect');
+  await user.click(screen.getByRole('button', { name: 'Войти', exact: true }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Слишком много попыток');
+  expect(screen.getByRole('button', { name: 'Войти', exact: true })).toBeEnabled();
+});

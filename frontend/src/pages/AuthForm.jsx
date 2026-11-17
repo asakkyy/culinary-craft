@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function AuthForm({ register = false }) {
   const { user, login, logout } = useApp();
@@ -27,6 +27,7 @@ export default function AuthForm({ register = false }) {
     finally { setBusy(false); }
   }
   return <section className="container narrow-page"><h1>{user ? user.name : signup ? 'Регистрация' : 'Вход'}</h1>
+    {user && user.emailVerified === false && <p role="status">Подтвердите email из письма, чтобы создавать рецепты, отзывы и жалобы. <Link to="/resend-verification">Отправить письмо повторно</Link></p>}
     {error && <p className="error-box" role="alert">{error}</p>}
     <form onSubmit={submit}>
       {!user && <>
@@ -37,5 +38,6 @@ export default function AuthForm({ register = false }) {
       <button className="btn btn-primary" disabled={busy}>{busy ? 'Подождите…' : user ? 'Выйти' : signup ? 'Создать аккаунт' : 'Войти'}</button>
       {!user && <button type="button" className="btn btn-outline" onClick={() => setSignup(!signup)}>{signup ? 'Уже есть аккаунт' : 'Регистрация'}</button>}
     </form>
+    <p><Link to="/forgot-password">Забыли пароль?</Link> · <Link to="/resend-verification">Подтвердить email</Link></p>
   </section>;
 }

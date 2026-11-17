@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import AdminPage from './pages/AdminPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import RecoveryPage from './pages/RecoveryPage';
 import AuthForm from './pages/AuthForm';
 import RequireAccount from './components/RequireAccount';
 import CatalogPage from './pages/CatalogPage';
@@ -13,6 +14,10 @@ import ModerationPage from './pages/ModerationPage';
 
 export default function App() {
   return <Layout><Routes>
+    <Route path="/forgot-password" element={<RecoveryPage key="forgot" mode="forgot"/>}/>
+    <Route path="/resend-verification" element={<RecoveryPage key="resend" mode="resend"/>}/>
+    <Route path="/verify-email" element={<RecoveryPage key="verify" mode="verify"/>}/>
+    <Route path="/reset-password" element={<RecoveryPage key="reset" mode="reset"/>}/>
     <Route path="/admin" element={<RequireAccount admin><AdminPage/></RequireAccount>}/>
     <Route path="/reports" element={<RequireAccount><ReportsPage/></RequireAccount>}/>
     <Route path="/settings" element={<RequireAccount><SettingsPage/></RequireAccount>}/>

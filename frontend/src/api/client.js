@@ -24,6 +24,11 @@ export function errorText(error) {
 
 const formFile = file => { const form = new FormData(); form.append('file', file); return form; };
 export const api = {
+  mediaCleanup: data => http.post('/admin/media/cleanup', data).then(r => r.data),
+  requestVerification: data => http.post('/auth/verification/request', data).then(r => r.data),
+  verifyEmail: data => http.post('/auth/verification/confirm', data),
+  requestPassword: data => http.post('/auth/password/request', data).then(r => r.data),
+  resetPassword: data => http.post('/auth/password/reset', data),
   report: (id, data) => http.post('/recipes/'+id+'/reports', data).then(r => r.data),
   myReports: params => http.get('/reports', { params }).then(r => r.data),
   adminReports: params => http.get('/admin/reports', { params }).then(r => r.data),

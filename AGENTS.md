@@ -1,5 +1,36 @@
 # AGENTS.md — Culinary Craft
 
+## Quality hardening
+
+- V8: CatalogQuery выполняет фильтрацию/сортировку/пагинацию/агрегаты в PostgreSQL.
+- search_text обслуживается триггерами рецептов и тегов, GIN pg_trgm сохраняет поиск подстроки.
+- pg_trgm требует CREATE для миграционной роли либо предварительной установки администратором.
+- Каталог: REPEATABLE READ, ID для равных ключей, максимум 30; batch коллекций и join владельца.
+- Между HTTP-запросами offset может смещаться при записи; cursor API ещё не вводился.
+- Не возвращать store.all() в каталог; личные списки пока сохраняют старый контракт без пагинации.
+
+- MediaCleanupService: dry-run/ADMIN API, minimum age 24h, max 500 generated files per batch.
+- PostgreSQL advisory lock 61319488: upload/delete transactions shared, cleaner exclusive.
+- Never remove referenced files, follow symlinks, recursively traverse MEDIA_ROOT or accept user paths.
+- Scheduler opt-in MEDIA_CLEANUP_ENABLED; deletion separately opt-in MEDIA_CLEANUP_DRY_RUN=false.
+- Tests must use temporary MEDIA_ROOT and keep background cleanup disabled.
+
+- V7: хешированные одноразовые email-токены, SMTP через Spring Mail, локально Mailpit.
+- До email verification разрешены вход/настройки, запись контента запрещена SecurityFilterChain.
+- Не делать LEGACY активными. V7 доверяет только существующим не-legacy ADMIN, USER подтверждают адрес.
+- Recovery/verification — публичные CSRF-защищённые POST, одинаковый 202 для неизвестного адреса.
+- После reset отозвать версии сессий, очистить cookie браузера и React Context.
+- DTO с паролями/токенами имеют redacted toString; не возвращать стандартное логирование секретов.
+- Отправка после commit асинхронно; токены не логировать, не сохранять в outbox в открытом виде.
+- E2E требует отдельные PostgreSQL и Mailpit, внешняя почта в тестах запрещена.
+
+- Ветка feature/security-reliability-hardening: V6 authentication_limits.
+- Ограничители входа/регистрации хранятся в PostgreSQL в отдельных транзакциях:
+  ошибки входа не откатывают счётчики. Не доверять пользовательскому X-Forwarded-For.
+- Cookie CSRF и JWT: SameSite=Strict, Secure из COOKIE_SECURE; только локально false.
+- Ошибки JSON/типов возвращают безопасный текст; внутренние сообщения Spring скрыты.
+- При изменении тестов ограничения сбрасываются только в изолированной Testcontainers БД.
+
 > Постоянные инструкции для Codex и других coding-агентов, работающих с этим репозиторием.
 > Последняя сверка с рабочей веткой `feature/postgresql-persistence`: 17.11.2026.
 > Обновление ветки `feature/profiles-media-moderation`: этапы II–IV — профили, медиа, администрация.
@@ -46,7 +77,7 @@ GitHub: https://github.com/asakkyy/culinary-craft
 - **ЛР №6 — прототип приложения:** React UI + Spring Boot REST API, каталог, подробная карточка рецепта, профиль, избранное, отзывы, создание/редактирование и модерация.
 - **ЛР №7 — автоматизированное тестирование:** JUnit 5, Spring Boot Test/MockMvc, Vitest, React Testing Library, Playwright, JaCoCo/V8 coverage, HTML/XML/JSON/CSV отчёты и CI quality gate.
 
-Учебное приложение использует настоящую авторизацию Spring Security/JWT и PostgreSQL. Для production ещё нужны эксплуатационное усиление, подтверждение email, восстановление доступа и ограничение попыток входа; не называй учебный сервер полностью production-ready.
+Учебное приложение использует Spring Security/JWT, PostgreSQL, email verification/recovery и ограничения входа. Production-развёртывание требует отдельной проверки TLS/proxy, SMTP, мониторинга, резервирования и зависимостей; не называй учебный сервер полностью production-ready.
 
 Главные цели будущих изменений:
 1. Продолжать развивать **существующий** проект, а не создавать ещё один «Culinary Craft» с нуля.
@@ -147,7 +178,7 @@ culinary-craft/
 - `persistence/RecipeStore` — преобразование JPA entities в существующие records; репозитории обеспечивают хранение рецептов, отзывов и избранного.
 - `service/DemoUserService` — роли и проверки доступа для RecipeService; текущий ID поступает из проверенного JWT, не из заголовка.
 - Flyway создаёт схему и однократно добавляет начальные данные. Hibernate использует `ddl-auto=validate`; не заменяй миграции автоматическим `update`/`create`.
-- Поиск, сортировка и пагинация пока выполняются сервисом в Java после чтения рецептов; это ограничение учебного объёма, не SQL-пагинация.
+- Каталог использует CatalogQuery (SQL, pg_trgm, LIMIT/OFFSET, агрегаты) и JPA batch для DTO страницы. Административные списки также пагинируются в БД.
 - `model/` — Java records, request/view-модели.
 - `api/ApiErrorHandler` — формат ошибок API.
 

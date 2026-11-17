@@ -1,6 +1,7 @@
 import ImageUpload from '../components/ImageUpload';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
 
@@ -29,6 +30,7 @@ export default function SettingsPage() {
     finally { setBusy(false); }
   }
   return <div className="container editor-page"><h1>Настройки аккаунта</h1>
+    <p>Email: {user.emailVerified ? 'подтверждён' : 'не подтверждён'}. <Link to="/resend-verification">Запросить письмо подтверждения</Link></p>
     <section className="editor-card"><h2>Аватар</h2><ImageUpload label="Аватар" url={user.avatarUrl} busy={busy}
       onFile={async file => { setBusy(true); try { await api.avatar(file); await refreshUser(); notify('Аватар сохранён'); } catch (err) { throw new Error(errorText(err)); } finally { setBusy(false); } }}
       onDelete={async () => { await api.deleteAvatar(); await refreshUser(); }}/></section>
@@ -36,7 +38,7 @@ export default function SettingsPage() {
     <section className="editor-card"><h2>Имя</h2><form onSubmit={e => save(e, 'name')}>
       <div className="field"><label htmlFor="profile-name">Отображаемое имя</label><input id="profile-name" minLength={2} maxLength={80} required value={name} onChange={e => setName(e.target.value)}/></div>
       <button disabled={busy} className="btn btn-primary">Сохранить имя</button></form></section>
-    <section className="editor-card"><h2>Email</h2><p>Изменение адреса подтверждается текущим паролем. Письмо подтверждения пока не отправляется.</p>
+    <section className="editor-card"><h2>Email</h2><p>После изменения подтвердите новый адрес по ссылке из письма. До подтверждения изменение контента недоступно.</p>
       <form onSubmit={e => save(e, 'email')}><div className="field"><label htmlFor="profile-email">Новый email</label><input id="profile-email" type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)}/></div>
       <div className="field"><label htmlFor="email-password">Пароль для смены email</label><input id="email-password" type="password" autoComplete="current-password" required maxLength={64} value={emailPassword} onChange={e => setEmailPassword(e.target.value)}/></div>
       <button disabled={busy} className="btn btn-primary">Сохранить email</button></form></section>

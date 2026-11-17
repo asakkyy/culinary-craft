@@ -27,8 +27,15 @@ class MediaApiTest extends PostgresIntegrationTest {
     @Autowired ImageStorage storage;
     private Cookie account(String email) {
         accounts.register(new AccountService.Registration("Author", email, "Test password 12345"));
+        jdbcVerification(email);
         return new Cookie("cc-session", tokens.issue(accounts.login(new AccountService.Login(email, "Test password 12345"))));
     }
+    private void jdbcVerification(String email) {
+        files.flush();
+        // Fixture for the already-verified author scenarios; verification itself has separate API tests.
+        usersForVerification.findByEmailIgnoreCase(email).orElseThrow().verifyEmail();
+    }
+    @Autowired com.culinarycraft.persistence.DemoUserRepository usersForVerification;
     private MockMultipartFile png(String name) throws Exception {
         var out = new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(4, 3, BufferedImage.TYPE_INT_RGB), "png", out);
         return new MockMultipartFile("file", name, "application/octet-stream", out.toByteArray());
@@ -64,6 +71,12 @@ class MediaApiTest extends PostgresIntegrationTest {
             .andExpect(status().isOk());
         var image = files.findByRecipeId(recipe.id()).get(0);
         mvc.perform(get(image.url())).andExpect(status().isNotFound());
+        mvc.perform(get(image.url()).cookie(other)).andExpect(status().isNotFound());
+        long otherId = tokens.decode(other.getValue()).getClaim("uid");
+        var forged = new RecipeRequest("Чужое фото", "Попытка присвоить управляемое изображение", "Супы", "", image.url(),
+            20, 2, "Легко", List.of("Вода"), List.of("Сварить"), List.of());
+        var denied = assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> recipes.create(forged, otherId));
+        assertEquals(400, denied.getStatusCode().value());
         mvc.perform(get(image.url()).cookie(owner)).andExpect(status().isOk());
         recipes.moderate(recipe.id(), "APPROVED", 3L);
         mvc.perform(get(image.url())).andExpect(status().isOk());

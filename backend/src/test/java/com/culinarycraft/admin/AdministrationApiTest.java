@@ -26,7 +26,8 @@ class AdministrationApiTest extends PostgresIntegrationTest {
     @Autowired AuditRepository audit;
     private final String password = "Test admin password 123";
     private DemoUserEntity create(String email, String role) {
-        return users.saveAndFlush(DemoUserEntity.account("Author " + email, email, passwords.encode(password), role));
+        var user = DemoUserEntity.account("Author " + email, email, passwords.encode(password), role);
+        user.verifyEmail(); return users.saveAndFlush(user);
     }
     private Cookie cookie(DemoUserEntity user) { return new Cookie("cc-session", tokens.issue(user)); }
     private String report() throws Exception { return json.writeValueAsString(Map.of("reason", "SPAM", "description", "Подробная причина жалобы на рецепт")); }

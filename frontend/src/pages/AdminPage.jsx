@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
 import ModerationPage from './ModerationPage';
+import MediaMaintenance from '../components/MediaMaintenance';
 import { reasons } from '../components/ReportForm';
 import { reportStatuses } from './ReportsPage';
 
@@ -13,7 +14,7 @@ export default function AdminPage() {
   const [data, setData] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [comments, setComments] = useState({});
   useEffect(() => {
-    if (tab === 'recipes') return;
+    if (tab === 'recipes' || tab === 'storage') return;
     let active = true; setData(null); setError('');
     const request = tab === 'reports' ? api.adminReports({ page, status: status || undefined, search })
       : tab === 'users' ? api.adminUsers({ page, status, search }) : api.adminAudit({ page, action: status || undefined });
@@ -29,8 +30,8 @@ export default function AdminPage() {
   const filters = tab === 'reports' ? reportStatuses : tab === 'users' ? { ACTIVE: 'Активные', BLOCKED: 'Заблокированные', LEGACY: 'Legacy' }
     : { USER_BLOCKED: 'Блокировки', USER_UNBLOCKED: 'Разблокировки', REPORT_IN_REVIEW: 'Жалобы в работе', REPORT_RESOLVED: 'Закрытие жалоб', REPORT_REJECTED: 'Отклонение жалоб', RECIPE_APPROVED: 'Одобрение рецептов', RECIPE_REJECTED: 'Отклонение рецептов' };
   return <div className="container moderation-page"><h1>Управление сообществом</h1>
-    <nav className="profile-tabs" aria-label="Разделы управления">{Object.entries({ recipes: 'Рецепты', reports: 'Жалобы', users: 'Пользователи', audit: 'Аудит' }).map(([key, name]) => <button className="btn btn-outline" key={key} onClick={() => { setTab(key); setStatus(''); setSearch(''); setPage(0); }}>{name}</button>)}</nav>
-    {tab === 'recipes' ? <ModerationPage/> : <>
+    <nav className="profile-tabs" aria-label="Разделы управления">{Object.entries({ recipes: 'Рецепты', reports: 'Жалобы', users: 'Пользователи', audit: 'Аудит', storage: 'Хранилище' }).map(([key, name]) => <button className="btn btn-outline" key={key} onClick={() => { setTab(key); setStatus(''); setSearch(''); setPage(0); }}>{name}</button>)}</nav>
+    {tab === 'recipes' ? <ModerationPage/> : tab === 'storage' ? <MediaMaintenance/> : <>
       <div className="catalog-toolbar"><label>Фильтр статуса<select aria-label="Фильтр статуса" value={status} onChange={e => { setStatus(e.target.value); setPage(0); }}><option value="">Все</option>{Object.entries(filters).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label>
         {tab !== 'audit' && <label>Поиск<input aria-label="Административный поиск" value={search} maxLength={100} onChange={e => { setSearch(e.target.value); setPage(0); }}/></label>}</div>
       {error && <p role="alert" className="error-box">{error}</p>}{!data && !error && <p role="status">Загрузка…</p>}
