@@ -3,16 +3,15 @@ package com.culinarycraft.service;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.culinarycraft.model.RecipeRequest;
-import org.junit.jupiter.api.BeforeEach;
+import com.culinarycraft.PostgresIntegrationTest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 
-class RecipeServiceTest {
-    private RecipeService service;
+class RecipeServiceTest extends PostgresIntegrationTest {
+    @Autowired private RecipeService service;
 
-    @BeforeEach
-    void setUp() { service = new RecipeService(new DemoUserService()); }
 
     @Test
     void guestCanBrowseApprovedRecipesOnly() {
