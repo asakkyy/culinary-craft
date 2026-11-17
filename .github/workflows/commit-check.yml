@@ -21,8 +21,23 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - name: Verify every commit in PR
+      - name: Fetch accepted histories and event commits
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git check-ref-format "refs/heads/$BASE_REF"
+          git fetch --no-tags origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            "+refs/heads/$BASE_REF:refs/remotes/origin/pr-base" \
+            "$BASE_SHA" "$HEAD_SHA"
+      - name: Test commit selection and strict linting
+        run: node --test scripts/check-pr-commits.test.mjs
+      - name: Verify every new PR commit including merges
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: npx commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+        run: node scripts/check-pr-commits.mjs "$BASE_SHA" "$HEAD_SHA" origin/main origin/pr-base
