@@ -29,6 +29,8 @@ export default function Layout({ children }) {
           <NavLink to="/favorites"><Heart size={17} /> Избранное</NavLink>
           <NavLink to="/profile"><BookOpen size={17} /> Моя кухня</NavLink>
           {user?.role === 'ADMIN' && <NavLink to="/moderation"><ShieldCheck size={17} /> Модерация</NavLink>}
+          <NavLink to="/reports">Мои жалобы</NavLink>
+          {user?.role === 'ADMIN' && <NavLink to="/admin">Управление</NavLink>}
         </nav>
         <div className="header-actions"><button className="btn btn-primary nav-create" onClick={handleCreate}><Plus size={18}/> Добавить рецепт</button>
           <button className="user-chip" onClick={() => setPickerOpen(true)} title="Выбрать демо-пользователя">

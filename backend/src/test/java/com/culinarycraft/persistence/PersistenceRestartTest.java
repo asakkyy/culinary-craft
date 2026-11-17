@@ -81,7 +81,7 @@ class PersistenceRestartTest {
             assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.get(8, 2L));
             assertEquals(8, service.catalog("", "Все рецепты", "newest", 0, 30, null).get("total"));
             var jdbc = second.getBean(JdbcTemplate.class);
-            assertEquals(4, jdbc.queryForObject(
+            assertEquals(5, jdbc.queryForObject(
                 "select count(*) from flyway_schema_history where success", Integer.class));
             service.delete(id, 1L);
             assertEquals(0, jdbc.queryForObject("select count(*) from reviews where recipe_id = ?", Integer.class, id));

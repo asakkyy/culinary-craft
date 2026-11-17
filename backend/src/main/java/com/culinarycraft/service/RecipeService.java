@@ -15,10 +15,12 @@ import org.springframework.web.server.ResponseStatusException;
 public class RecipeService {
     private final DemoUserService users;
     private final RecipeStore store;
+    private final com.culinarycraft.admin.AuditService audit;
 
-    public RecipeService(DemoUserService users, RecipeStore store) {
+    public RecipeService(DemoUserService users, RecipeStore store, com.culinarycraft.admin.AuditService audit) {
         this.users = users;
         this.store = store;
+        this.audit = audit;
     }
 
     public Map<String, Object> catalog(String search, String category, String sort,
@@ -159,6 +161,8 @@ public class RecipeService {
         Recipe changed = new Recipe(r.id(), r.title(), r.description(), r.category(), r.emoji(),
             r.imageUrl(), r.prepMinutes(), r.servings(), r.difficulty(), r.ingredients(),
             r.steps(), r.tags(), r.ownerId(), r.ownerName(), status, r.createdAt());
+        audit.record(userId, "APPROVED".equals(status) ? com.culinarycraft.admin.AuditEvent.Action.RECIPE_APPROVED
+            : com.culinarycraft.admin.AuditEvent.Action.RECIPE_REJECTED, "RECIPE", id, "Status: " + status);
         return view(store.save(changed), userId);
     }
 

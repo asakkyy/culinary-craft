@@ -24,6 +24,14 @@ export function errorText(error) {
 
 const formFile = file => { const form = new FormData(); form.append('file', file); return form; };
 export const api = {
+  report: (id, data) => http.post('/recipes/'+id+'/reports', data).then(r => r.data),
+  myReports: params => http.get('/reports', { params }).then(r => r.data),
+  adminReports: params => http.get('/admin/reports', { params }).then(r => r.data),
+  reportDecision: (id, data) => http.post('/admin/reports/'+id+'/decision', data).then(r => r.data),
+  adminUsers: params => http.get('/admin/users', { params }).then(r => r.data),
+  blockUser: (id, data) => http.post('/admin/users/'+id+'/block', data).then(r => r.data),
+  unblockUser: id => http.post('/admin/users/'+id+'/unblock').then(r => r.data),
+  adminAudit: params => http.get('/admin/audit', { params }).then(r => r.data),
   avatar: file => http.post('/account/avatar', formFile(file)).then(r => r.data),
   deleteAvatar: () => http.delete('/account/avatar'),
   photo: (id, file) => http.post('/recipes/'+id+'/photo', formFile(file)).then(r => r.data),

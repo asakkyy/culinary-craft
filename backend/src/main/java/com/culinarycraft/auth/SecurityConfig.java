@@ -40,6 +40,7 @@ public class SecurityConfig {
         })).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .csrf(csrf -> csrf.csrfTokenRepository(new CookieCsrfTokenRepository()))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/admin/**", "/api/reports/**").authenticated()
                 .requestMatchers("/api/auth/me", "/api/auth/logout", "/api/recipes/mine", "/api/recipes/favorites", "/api/recipes/pending").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
                 .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()

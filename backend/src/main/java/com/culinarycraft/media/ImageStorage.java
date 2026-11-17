@@ -46,6 +46,7 @@ public class ImageStorage {
             temporary = Files.createTempFile(root, ".upload-", ".tmp");
             if (!ImageIO.write(image, "PNG", temporary.toFile())) throw new IOException("PNG encoder unavailable");
             long bytes = Files.size(temporary);
+            if (bytes > MAX_BYTES) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "PNG после обработки превышает 5 МБ");
             // Fail safely if the filesystem does not support an atomic move.
             Files.move(temporary, path(id), StandardCopyOption.ATOMIC_MOVE);
             return new Stored(id, bytes, image.getWidth(), image.getHeight());

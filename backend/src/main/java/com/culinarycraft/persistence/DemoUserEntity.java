@@ -21,6 +21,8 @@ public class DemoUserEntity {
     private java.time.Instant updatedAt;
     private String avatarUrl;
     private long tokenVersion;
+    @Column(length = 500) private String blockReason;
+    private java.time.Instant blockedAt;
 
     public static DemoUserEntity account(String name, String email, String hash, String role) {
         var account = new DemoUserEntity();
@@ -48,6 +50,13 @@ public class DemoUserEntity {
     public void changeEmail(String value) { email = value; updatedAt = java.time.Instant.now(); }
     public void changePassword(String hash) { passwordHash = hash; revokeTokens(); updatedAt = java.time.Instant.now(); }
     public void avatar(String url) { avatarUrl = url; updatedAt = java.time.Instant.now(); }
+    public String getBlockReason() { return blockReason; }
+    public java.time.Instant getBlockedAt() { return blockedAt; }
+    public void block(boolean blocked, String reason) {
+        status = blocked ? "BLOCKED" : "ACTIVE";
+        blockReason = blocked ? reason : null; blockedAt = blocked ? java.time.Instant.now() : null;
+        revokeTokens(); updatedAt = java.time.Instant.now();
+    }
 
     public DemoUser toModel() { return new DemoUser(id, name, role, initials, subtitle); }
 }
