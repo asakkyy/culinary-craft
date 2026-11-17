@@ -1,6 +1,182 @@
 # Culinary Craft
 
-### Усиление безопасности
+Учебное приложение для рецептов и кулинарного сообщества.
+Стек проекта — React 18, Vite, Spring Boot 3.5.7 и PostgreSQL 17.
+
+## Запуск с нуля на Windows
+
+### 1. Установите инструменты и выберите ветку
+
+На Windows проверены Temurin JDK 21.0.11, Node.js 22.15.1, npm 10.9.2,
+Git 2.52.0 и Docker Desktop 4.49.0 с Engine 28.5.1 и Compose v2.40.2.
+Для запуска удобно взять актуальные патчи JDK 21 и Node.js 22. Требуется
+Node.js 22.12 или новее в ветке 22. npm поставляется с Node.js. Gradle Wrapper
+скачает версию Gradle из проекта. Python 3 нужен для локальной сборки метрик.
+
+Запустите Docker Desktop в режиме Linux containers и дождитесь готовности Engine.
+Проверьте инструменты в PowerShell:
+
+```powershell
+java -version
+node --version
+npm.cmd --version
+git --version
+docker version
+docker compose version
+```
+
+```powershell
+git clone https://github.com/asakkyy/culinary-craft.git
+Set-Location culinary-craft
+git switch dev
+```
+
+`dev` содержит интегрированную версию с PostgreSQL, аккаунтами, модерацией и
+редизайном. `main` публикует релизы и может отставать от `dev`. Для проверки
+черновиков этого этапа до его интеграции переключитесь на
+`git switch --track origin/feature/final-stabilization`.
+
+### 2. Терминал 1 — PostgreSQL, Mailpit и backend
+
+В корне репозитория установите зависимости Git hooks:
+
+```powershell
+npm.cmd ci
+```
+
+Задайте параметры новой локальной базы. Выберите собственный пароль и сохраните
+его для повторных запусков с этим volume. PowerShell скрывает ввод пароля:
+
+```powershell
+$env:POSTGRES_DB = 'culinary_craft'
+$env:POSTGRES_PORT = '5432' # Если 5432 занят, укажите '55432'.
+$env:DB_USERNAME = 'culinary_demo'
+$dbPassword = Read-Host 'Пароль локальной PostgreSQL' -AsSecureString
+$env:DB_PASSWORD = [Net.NetworkCredential]::new('', $dbPassword).Password
+Remove-Variable dbPassword
+$env:DB_URL = "jdbc:postgresql://127.0.0.1:${env:POSTGRES_PORT}/${env:POSTGRES_DB}"
+$env:MAIL_PORT = '1025'
+$env:MAILPIT_WEB_PORT = '8025'
+
+docker compose up -d --wait postgres mailpit
+docker compose ps
+```
+
+Compose оставляет внутренний порт PostgreSQL 5432 и публикует его на
+`127.0.0.1:$env:POSTGRES_PORT`. При переносе на 55432 задайте этот порт перед
+запуском Compose и пересчитайте `DB_URL` той же строкой. При повторном запуске
+используйте исходные имя базы, пользователя и пароль. Переменные
+инициализации действуют при первом старте с пустым volume.
+
+В том же терминале подготовьте JVM-процесс и первого администратора:
+
+```powershell
+$keyBytes = New-Object byte[] 48
+$random = [Security.Cryptography.RandomNumberGenerator]::Create()
+try { $random.GetBytes($keyBytes) } finally { $random.Dispose() }
+$env:JWT_SECRET = [Convert]::ToBase64String($keyBytes)
+Remove-Variable keyBytes, random
+$env:COOKIE_SECURE = 'false' # Локальный HTTP. Через HTTPS используйте true.
+$env:MEDIA_ROOT = Join-Path $PWD.Path 'backend/data/media'
+$env:MEDIA_CLEANUP_ENABLED = 'false'
+$env:MAIL_HOST = '127.0.0.1'
+$env:MAIL_AUTH = 'false'
+$env:MAIL_STARTTLS = 'false'
+$env:MAIL_FROM = 'culinary@example.test'
+$env:PUBLIC_APP_URL = 'http://127.0.0.1:5173'
+
+$env:BOOTSTRAP_ADMIN = 'true'
+$env:ADMIN_EMAIL = Read-Host 'Email первого администратора'
+$adminPassword = Read-Host 'Пароль администратора (16–64 символа ASCII)' -AsSecureString
+$env:ADMIN_PASSWORD = [Net.NetworkCredential]::new('', $adminPassword).Password
+Remove-Variable adminPassword
+
+Set-Location backend
+.\gradlew.bat bootRun
+```
+
+`JWT_SECRET` должен содержать минимум 32 случайных байта в Base64. Храните ключ
+и пароли вне Git. Для сохранения сессий при повторных запусках используйте тот
+же JWT-ключ из защищённого окружения. Новый ключ отзывает выданные сессии.
+Compose читает `.env`. Spring Boot получает переменные из окружения процесса,
+поэтому значения из `.env` нужно отдельно передать в терминал backend.
+В уже открытые окна PowerShell переменные автоматически не передаются.
+
+Bootstrap создаёт подтверждённого ADMIN только при отсутствии активного ADMIN.
+Существующему USER роль не повышается. После первого входа в
+`http://127.0.0.1:5173/login` по выбранным email и паролю откройте
+`http://127.0.0.1:5173/admin`. Остановите backend через Ctrl+C и отключите
+bootstrap перед следующим запуском из `backend`:
+
+```powershell
+$env:BOOTSTRAP_ADMIN = 'false'
+Remove-Item -LiteralPath Env:ADMIN_EMAIL, Env:ADMIN_PASSWORD -ErrorAction SilentlyContinue
+.\gradlew.bat bootRun
+```
+
+Если активный ADMIN уже существует, запускайте с отключённым bootstrap и
+используйте его учётную запись. Для восстановления пароля выберите
+«Забыли пароль?» на странице входа, укажите текущий email администратора и
+откройте письмо в Mailpit. После сброса войдите с новым паролем.
+
+### 3. Терминал 2 — frontend
+
+Откройте второй PowerShell в корне того же репозитория:
+
+```powershell
+Set-Location frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Приложение работает на [127.0.0.1:5173](http://127.0.0.1:5173), Mailpit на
+[127.0.0.1:8025](http://127.0.0.1:8025). Vite проксирует `/api` на backend.
+Из любого терминала проверьте, что backend запустился и вернул
+`storage = POSTGRESQL`:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/api/health
+```
+
+Для остановки используйте Ctrl+C в обоих терминалах и `docker compose stop`
+из корня. `docker compose down` удаляет контейнеры и сохраняет именованный
+volume `postgres_data`. Для обычной остановки выбирайте команду без `-v`.
+
+### 4. Сценарий демонстрации
+
+1. Зарегистрируйте обычного пользователя. На странице подтверждения нажмите
+   «Отправить письмо». Регистрация сама письмо не отправляет.
+2. Откройте письмо в Mailpit, перейдите по ссылке и нажмите «Подтвердить email».
+   Пользователь вернётся в профиль. Для сброса пароля используется отдельная
+   форма `/forgot-password` и отдельное письмо.
+3. Нажмите «Добавить рецепт», заполните форму и выберите фото PNG или JPEG
+   до 5 МБ. Отправьте рецепт на модерацию.
+4. Войдите как ADMIN в отдельном профиле браузера или приватном окне.
+   Откройте `/admin`, найдите рецепт в очереди и одобрите его.
+5. В пользовательском окне найдите рецепт в каталоге, добавьте его в избранное
+   и отправьте жалобу. В панели ADMIN рассмотрите жалобу и проверьте событие
+   в разделе аудита.
+6. Откройте редактор, измените текст и уйдите через «Сохранить черновик и выйти».
+   При следующем открытии выберите «Восстановить черновик» и сверьте текст.
+   Новое локальное фото потребуется выбрать заново. Уже загруженное фото
+   остаётся на сервере.
+
+### 5. Если запуск остановился
+
+| Симптом | Проверка и действие |
+| --- | --- |
+| Docker не отвечает | Запустите Docker Desktop, выберите Linux containers, повторите `docker version` до появления раздела Server. |
+| Порт PostgreSQL занят | Задайте `POSTGRES_PORT=55432` в терминале 1, пересчитайте `DB_URL`, повторите запуск Compose. |
+| Backend не подключается к БД | Сверьте `docker compose ps`, порт и имя базы в `DB_URL`, затем пользователя и пароль исходного volume. |
+| Backend требует JWT или данные ADMIN | Задайте `JWT_SECRET` и оба параметра ADMIN в терминале backend. Для существующего ADMIN отключите bootstrap. |
+| Письмо не приходит | Нажмите «Отправить письмо» и проверьте Mailpit, `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, `MAIL_AUTH` и `MAIL_STARTTLS`. Повторный запрос доступен после паузы. |
+| Ссылка из письма недействительна | Запросите свежее письмо для текущего email. Откройте его по `PUBLIC_APP_URL`, который использует браузер. |
+| Frontend не видит backend | Проверьте `/api/health` на 8080 и используйте `127.0.0.1:5173` в браузере. Для HTTP проверьте `COOKIE_SECURE=false`. |
+| Порт 8080 или 5173 занят | Выполните `Get-NetTCPConnection -State Listen -LocalPort 8080,5173`. Проверьте `OwningProcess` и остановите свой старый сервер, чтобы сохранить адреса Vite и backend. |
+| Java Language Server показывает ошибки | Сверьте `JAVA_HOME`, выполните `.\gradlew.bat --version` и `.\gradlew.bat compileJava` из `backend`. В VS Code обновите Gradle-проект или выполните «Java: Clean Java Language Server Workspace». |
+| Flyway остановился | Прочитайте первую ошибку в журнале backend, сверьте базу из `DB_URL`, историю `flyway_schema_history` и права на `pg_trgm`. Для рабочей базы сначала сделайте резервную копию и исправьте причину по истории миграций. |
+
+## Усиление безопасности
 
 V6 добавляет общие для экземпляров приложения PostgreSQL-счётчики попыток:
 вход — 30 запросов на IP и 10 на email за 10 минут, регистрация — 10 на IP
@@ -12,7 +188,6 @@ Cookie сессии и CSRF используют SameSite=Strict и Secure по 
 COOKIE_SECURE=false допустим только для локального HTTP. Сообщения внутренних
 ошибок, stacktrace и rejected values не включаются в стандартные ответы Spring.
 
-Учебное приложение: React 18/Vite + Spring Boot 3.5.7 + PostgreSQL 17.
 Рецепты, отзывы, избранное, аккаунты, жалобы и аудит сохраняются в PostgreSQL.
 Реализованы Auth & Security, настройки профиля, аватары и фото рецептов,
 пользовательские жалобы, административное рассмотрение, блокировки и аудит.
@@ -39,25 +214,8 @@ JWT подписывается HS256 библиотекой Nimbus/Spring Securi
 POST/PUT/DELETE требуют CSRF: клиент получает маскированный токен через
 `/api/auth/csrf` и передаёт его в `X-XSRF-TOKEN`; JWT cookie не отменяет CSRF.
 
-До `bootRun` в том же PowerShell задайте случайный ключ (не коммитьте его):
-
-```powershell
-$keyBytes = New-Object byte[] 48
-$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($keyBytes)
-$rng.Dispose()
-$env:JWT_SECRET = [Convert]::ToBase64String($keyBytes)
-$env:COOKIE_SECURE = 'false' # Только локальный HTTP; по умолчанию true, нужен HTTPS.
-```
-
-Сохраняйте ключ в защищённом окружении для перезапусков. Смена ключа отзывает
-все JWT. Без JWT_SECRET backend намеренно не запускается. Для первого ADMIN
-однократно включите `BOOTSTRAP_ADMIN=true`, задайте `ADMIN_EMAIL` и
-`ADMIN_PASSWORD` (16–64 символа, для BCrypt используйте ASCII). Не публикуйте
-эти значения и не вводите пароль в отслеживаемые файлы. Инициализация защищена
-транзакционной advisory lock и создаёт новый ADMIN только при отсутствии
-активного администратора; существующие USER не повышаются. Затем уберите
-bootstrap-переменные из окружения. Публичного API назначения ADMIN нет.
+Подготовка JWT и первого ADMIN описана в [инструкции запуска](#запуск-с-нуля-на-windows).
+Bootstrap защищён транзакционной advisory lock. Публичного API назначения ADMIN нет.
 
 Подтверждение email, восстановление пароля и ограничение попыток реализованы.
 Пользовательского списка отдельных сессий пока нет. Статус
@@ -217,9 +375,8 @@ email, статус ACTIVE и версия сессий проверяются �
 Запросы писем подавляются одинаково для известных/неизвестных адресов: раз в
 минуту, максимум пять в сутки на адрес и назначение; IP — 30 запросов за 10 минут.
 
-Локально запустите `docker compose up -d postgres mailpit`. SMTP слушает только
-127.0.0.1:1025, просмотр писем: http://127.0.0.1:8025. Mailpit не пересылает их
-наружу. Страницы: `/forgot-password`, `/resend-verification`, `/verify-email`,
+Локальный Mailpit принимает и показывает письма. Страницы:
+`/forgot-password`, `/resend-verification`, `/verify-email`,
 `/reset-password`. Для удалённого SMTP задайте MAIL_HOST, MAIL_PORT, MAIL_USERNAME,
 MAIL_PASSWORD, MAIL_AUTH=true, MAIL_STARTTLS=true и MAIL_FROM. PUBLIC_APP_URL —
 явный origin frontend (по умолчанию http://127.0.0.1:5173), не берётся из Host.
@@ -275,76 +432,19 @@ JWT/CSRF, отзыв сессий, блокировки, правила очис
 Результаты проверок доступны в [итоговом отчёте](reports/final-audit.html)
 и [матрице требований](docs/ui-redesign-verification.md).
 
-## Окружение
+### Черновики редактора
 
-- Windows, PowerShell, Git, JDK 17 или 21, Node.js 22.12+ в ветке 22 и npm.
-- Docker Desktop с запущенным Linux engine и Docker Compose v2.
-- Python 3 нужен только для скриптов сводных метрик.
-- Gradle устанавливать отдельно не нужно: используется wrapper из `backend/`.
+Редактор сохраняет изменённые поля через 400 мс после ввода и сразу при
+подтверждённом уходе. Черновик живёт в профиле браузера, отдельно для каждого
+аккаунта, нового рецепта и каждого редактируемого рецепта. Чтобы продолжить,
+откройте тот же редактор и выберите «Восстановить черновик». Если изменённое
+поле на сервере уже обновилось, редактор предупредит об этом перед
+восстановлением. Проверьте форму перед отправкой.
 
-В PowerShell можно использовать `npm.cmd`/`npx.cmd`, если политика выполнения
-блокирует `npm.ps1`. Все команды ниже начинаются из корня репозитория.
-
-## Локальный запуск
-
-```powershell
-npm.cmd ci                           # Husky и commitlint, однократно
-docker compose up -d --wait postgres
-docker compose ps
-```
-
-PostgreSQL доступен только на `127.0.0.1:5432`. Данные лежат в именованном Docker
-volume `postgres_data`. В первом терминале:
-
-```powershell
-Set-Location backend
-.\gradlew.bat bootRun
-```
-
-Во втором терминале из корня:
-
-```powershell
-Set-Location frontend
-npm.cmd ci
-npm.cmd run dev
-```
-
-Открыть http://127.0.0.1:5173. Проверка backend:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8080/api/health
-```
-
-`storage` теперь возвращает `POSTGRESQL`; остальные ключи health и контракт
-рецептов сохранены. Без работающей БД backend не запускается.
-
-## Переменные окружения
-
-| Переменная | По умолчанию | Назначение |
-| --- | --- | --- |
-| `DB_URL` | `jdbc:postgresql://127.0.0.1:5432/culinary_craft` | JDBC URL backend |
-| `DB_USERNAME` | `culinary_demo` | Пользователь backend и Compose |
-| `DB_PASSWORD` | `culinary_demo_local` | Явно демонстрационный локальный пароль |
-| `POSTGRES_DB` | `culinary_craft` | Имя создаваемой Compose базы |
-| `POSTGRES_PORT` | `5432` | Локальный порт Compose |
-
-Переопределять переменные можно в PowerShell перед запуском Compose и backend:
-
-```powershell
-$env:POSTGRES_PORT = '5433'
-$env:DB_URL = 'jdbc:postgresql://127.0.0.1:5433/culinary_craft'
-# При необходимости задайте DB_USERNAME и DB_PASSWORD локально в этом терминале.
-docker compose up -d --wait postgres
-Set-Location backend
-.\gradlew.bat bootRun
-```
-
-При смене имени базы или порта меняйте также `DB_URL`. Переменные окружения
-передаются дочерним процессам, но не другим уже открытым терминалам. Compose
-читает `.env`; Spring Boot сам по себе этот файл не читает. `.env` исключён из Git.
-Настройки `POSTGRES_*` создают пользователя и базу только при первом запуске с
-пустым volume: изменение переменных не меняет пароль уже существующей БД.
-Демонстрационные значения подходят только для локальной учебной среды.
+Локальные файлы и временные или приватные ссылки на фото нужно выбрать заново.
+Загрузка фото выполняется при отправке рецепта. Успешная отправка удаляет
+соответствующий черновик. Для демонстрации на общем компьютере используйте
+отдельный профиль браузера.
 
 ## Схема и миграции
 

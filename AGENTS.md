@@ -94,7 +94,7 @@ GitHub: https://github.com/asakkyy/culinary-craft
 | Backend | Java, Spring Boot **3.5.7**, Gradle (Groovy DSL), Spring Web, Validation, Spring Data JPA |
 | Java compatibility | `sourceCompatibility`/`targetCompatibility`: **Java 17**; GitHub CI использует **JDK 21** |
 | Backend test/quality | JUnit 5, Spring Boot Test, MockMvc, Testcontainers PostgreSQL, Checkstyle, JaCoCo |
-| Frontend | React **18**, React Router **6**, Vite **6**, JavaScript/JSX |
+| Frontend | React **18**, React Router **7**, Vite **6**, JavaScript/JSX |
 | Frontend API/state | Axios, React Context (`AppContext`), HttpOnly JWT cookie + CSRF |
 | Frontend test/quality | Vitest **5**, React Testing Library, Playwright (Chromium в CI, локально также Firefox и WebKit), ESLint, Prettier, V8 coverage |
 | Automation | GitHub Actions, Husky, Commitlint, Python-скрипты метрик |
@@ -167,6 +167,7 @@ culinary-craft/
 - `api/client.js` — **единая точка HTTP-запросов**. Axios использует `/api` и CSRF для мутаций; X-Demo-User не отправляется и не доверяется.
 - В режиме разработки Vite проксирует `/api` на `http://127.0.0.1:8080`.
 - Не дублируй базовые URL, HTTP-логику и обработку ошибок в страницах без необходимости.
+- Черновики редактора локальны для профиля браузера и привязаны к ID аккаунта и режиму создания или ID рецепта. Сохраняй только разрешённые поля и признаки работы с фото. Токены и файлы остаются вне localStorage.
 
 Маршруты приложения: `/`, `/recipes/:id`, `/recipes/:id/edit`, `/create`, `/profile`, `/favorites`, `/moderation`, а также страница 404.
 
