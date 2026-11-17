@@ -60,10 +60,6 @@ public class AccountEmailService {
         if (!"ACTIVE".equals(user.getStatus()) || (purpose.equals("VERIFY") && user.isEmailVerified())) return;
         issue(user, purpose);
     }
-    public void verification(long id) {
-        var user = users.lockById(id).orElseThrow();
-        if (!user.isEmailVerified()) request(user.getEmail(), "VERIFY");
-    }
     private void issue(DemoUserEntity user, String purpose) {
         byte[] bytes = new byte[32]; random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);

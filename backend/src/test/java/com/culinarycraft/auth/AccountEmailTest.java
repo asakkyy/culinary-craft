@@ -16,6 +16,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 class AccountEmailTest extends PostgresIntegrationTest {
     @Autowired AccountService accounts;
     @Autowired AccountEmailService emails;
+    @Autowired ProfileService profiles;
     @Autowired DemoUserRepository users;
     @Autowired ApplicationEvents events;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
@@ -23,7 +24,25 @@ class AccountEmailTest extends PostgresIntegrationTest {
     @Autowired TokenService tokens;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private final String password = "Original secure password 123";
-    private AccountView register() { return accounts.register(new AccountService.Registration("Author", "mail@example.test", password)); }
+    private AccountView register() {
+        var account = accounts.register(new AccountService.Registration("Author", "mail@example.test", password));
+        assertEquals(0, events.stream(AccountEmailService.Mail.class).count());
+        emails.request(account.email(), "VERIFY");
+        return account;
+    }
+    @Test void registrationLoginAndEmailChangeNeverSendMailAutomatically() throws Exception {
+        var user = accounts.register(new AccountService.Registration("Author", "explicit@example.test", password));
+        accounts.login(new AccountService.Login(user.email(), password));
+        profiles.email(user.id(), new ProfileService.Email("new-address@example.test", password));
+        assertEquals(0, events.stream(AccountEmailService.Mail.class).count());
+        assertEquals(0, jdbc.queryForObject("select count(*) from account_email_tokens where user_id = ?", Integer.class, user.id()));
+        mvc.perform(post("/api/auth/verification/request").with(csrf()).contentType("application/json")
+            .content("{\"email\":\"new-address@example.test\"}")).andExpect(status().isAccepted());
+        assertEquals(1, events.stream(AccountEmailService.Mail.class).count());
+        assertFalse(accounts.me(user.id()).emailVerified());
+        mvc.perform(post("/api/auth/verification/request").contentType("application/json")
+            .content("{\"email\":\"new-address@example.test\"}")).andExpect(status().isForbidden());
+    }
     private String token() {
         var text = events.stream(AccountEmailService.Mail.class).reduce((first, second) -> second).orElseThrow().text();
         return text.substring(text.indexOf("#token=") + 7).split("\n")[0];

@@ -92,4 +92,34 @@ class AdministrationApiTest extends PostgresIntegrationTest {
             .content("{\"reason\":\"INVALID\",\"description\":\"invalid reason\"}")).andExpect(status().isBadRequest());
         mvc.perform(get("/api/admin/users").cookie(cookie(owner))).andExpect(status().isForbidden());
     }
+    @Test void optionalDescriptionAndAdministrativeSortingStayServerSide() throws Exception {
+        var owner = create("sorter@example.test", "USER"); var admin = create("admin-sort@example.test", "ADMIN");
+        mvc.perform(post("/api/recipes/1/reports").cookie(cookie(owner)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\":\"SPAM\"}")).andExpect(status().isCreated());
+        mvc.perform(get("/api/admin/reports").cookie(cookie(admin)).param("sort", "createdAt,asc").param("size", "10"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
+        mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("role", "USER").param("status", "ACTIVE")
+            .param("sort", "name,asc").param("size", "1")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.content[0].email").value(owner.getEmail()));
+        mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("sort", "passwordHash,asc")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/admin/users").cookie(cookie(admin)).param("role", "SUPERUSER")).andExpect(status().isBadRequest());
+    }
+    @Test void unpublishingIsProtectedAuditedAndPreservesTheRecipe() throws Exception {
+        var admin = create("publisher@example.test", "ADMIN"); var owner = create("reader@example.test", "USER");
+        mvc.perform(post("/api/admin/recipes/1/unpublish").cookie(cookie(owner)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\":\"Проверка содержания\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/recipes/1/unpublish").cookie(cookie(admin)).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\":\"Проверка содержания\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/recipes/1/unpublish").cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\":\"Проверка содержания\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
+        mvc.perform(get("/api/recipes/1")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/recipes/1").cookie(cookie(admin))).andExpect(status().isOk()).andExpect(jsonPath("$.ingredients").isNotEmpty());
+        mvc.perform(post("/api/admin/recipes/1/unpublish").cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"reason\":\"Повторное действие\"}")).andExpect(status().isConflict());
+        mvc.perform(get("/api/admin/audit").cookie(cookie(admin)).param("action", "RECIPE_UNPUBLISHED"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.content[0].adminName").value(admin.toModel().name()));
+        mvc.perform(post("/api/recipes/1/moderate").cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\":\"APPROVED\"}")).andExpect(status().isOk());
+        mvc.perform(get("/api/recipes/1")).andExpect(status().isOk());
+    }
 }
