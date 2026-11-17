@@ -1,4 +1,14 @@
 import { test, expect } from '@playwright/test';
+
+test('CSRF обязателен для входа, повреждённая сессия не даёт доступ', async ({ request }) => {
+  const csrf = await request.get('/api/auth/csrf');
+  expect(csrf.headers()['set-cookie']).toContain('SameSite=Strict');
+  expect(csrf.headers()['set-cookie']).toContain('HttpOnly');
+  expect((await request.post('/api/auth/login', { data: { email: 'nobody@e2e.invalid', password: 'wrong' } })).status()).toBe(403);
+  const response = await request.get('/api/auth/me', { headers: { Cookie: 'cc-session=broken' } });
+  expect(response.status()).toBe(401);
+  expect(await response.json()).toEqual({ message: 'Session expired, please sign in again' });
+});
 test('Жалоба, решение, аудит и блокировка действующей сессии', async ({ page, browser }) => {
   const suffix = Date.now(); const email = `reporter${suffix}@e2e.invalid`;
   await page.goto('/register');

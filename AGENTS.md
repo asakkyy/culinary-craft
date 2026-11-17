@@ -1,5 +1,14 @@
 # AGENTS.md — Culinary Craft
 
+## Quality hardening
+
+- Ветка feature/security-reliability-hardening: V6 authentication_limits.
+- Ограничители входа/регистрации хранятся в PostgreSQL в отдельных транзакциях:
+  ошибки входа не откатывают счётчики. Не доверять пользовательскому X-Forwarded-For.
+- Cookie CSRF и JWT: SameSite=Strict, Secure из COOKIE_SECURE; только локально false.
+- Ошибки JSON/типов возвращают безопасный текст; внутренние сообщения Spring скрыты.
+- При изменении тестов ограничения сбрасываются только в изолированной Testcontainers БД.
+
 > Постоянные инструкции для Codex и других coding-агентов, работающих с этим репозиторием.
 > Последняя сверка с рабочей веткой `feature/postgresql-persistence`: 17.11.2026.
 > Обновление ветки `feature/profiles-media-moderation`: этапы II–IV — профили, медиа, администрация.
