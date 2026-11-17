@@ -43,6 +43,8 @@ test('Автор создаёт рецепт, администратор его 
   await item.getByRole('button', { name: 'Одобрить' }).click();
   await expect(item).toHaveCount(0);
 
+  await page.getByRole('button', { name: /Марина/ }).click();
+  await page.getByRole('dialog', { name: 'Выбор роли' }).getByRole('button', { name: /Гость/ }).click();
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Поиск рецептов' }).fill(title);
   await page.getByRole('button', { name: /^Найти/ }).click();

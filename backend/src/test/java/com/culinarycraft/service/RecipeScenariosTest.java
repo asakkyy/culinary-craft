@@ -4,20 +4,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.culinarycraft.model.RecipeRequest;
 import com.culinarycraft.model.ReviewRequest;
+import com.culinarycraft.model.RecipeView;
+import java.util.Comparator;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
+import com.culinarycraft.PostgresIntegrationTest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Unit tests of the in-memory prototype: business rules without HTTP. */
-class RecipeScenariosTest {
-    private RecipeService service;
+/** Business rules against PostgreSQL without HTTP. */
+class RecipeScenariosTest extends PostgresIntegrationTest {
+    @Autowired private RecipeService service;
 
-    @BeforeEach
-    void setup() {
-        service = new RecipeService(new DemoUserService());
-    }
 
     private RecipeRequest request(String title) {
         return new RecipeRequest(title, "Домашнее блюдо с подробным и понятным описанием",
@@ -49,11 +48,24 @@ class RecipeScenariosTest {
         assertEquals(3, ((List<?>) second.get("content")).size());
         assertEquals(3, first.get("totalPages"));
         assertEquals(0, ((List<?>) service.catalog("", "Все рецепты", "quick", 99, 3, null).get("content")).size());
+        assertEquals(30, service.catalog("", "Все рецепты", "quick", -1, 100, null).get("size"));
+        assertEquals(0, service.catalog("", "Все рецепты", "quick", -1, 0, null).get("page"));
+        assertEquals(1, service.catalog("", "Все рецепты", "quick", -1, 0, null).get("size"));
     }
 
     @Test void allSortStrategiesAreAvailable() {
         for (String sort : List.of("newest", "popular", "quick", "rating")) {
-            assertEquals(8, service.catalog("", "Все рецепты", sort, 0, 30, null).get("total"));
+            var result = service.catalog("", "Все рецепты", sort, 0, 30, null);
+            assertEquals(8, result.get("total"));
+            List<RecipeView> content = ((List<?>) result.get("content")).stream().map(RecipeView.class::cast).toList();
+            Comparator<RecipeView> order = switch (sort) {
+                case "newest" -> Comparator.comparing(RecipeView::createdAt).reversed();
+                case "quick" -> Comparator.comparingInt(RecipeView::prepMinutes);
+                case "rating" -> Comparator.comparingDouble(RecipeView::rating).reversed();
+                default -> Comparator.comparingDouble(RecipeView::rating).reversed()
+                    .thenComparing(RecipeView::createdAt, Comparator.reverseOrder());
+            };
+            assertEquals(content.stream().sorted(order).toList(), content);
         }
     }
 
