@@ -1,10 +1,18 @@
 import axios from 'axios';
 
 export const http = axios.create({ baseURL: '/api', timeout: 10000 });
+http.interceptors.response.use(response => response, error => {
+  if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
+    window.dispatchEvent(new Event('cc-session-expired'));
+  }
+  return Promise.reject(error);
+});
 
-http.interceptors.request.use((config) => {
-  const userId = localStorage.getItem('cc-demo-user');
-  if (userId && userId !== 'guest') config.headers['X-Demo-User'] = userId;
+http.interceptors.request.use(async (config) => {
+  if (!['get', 'head', 'options'].includes(config.method || 'get')) {
+    const { data } = await axios.get('/api/auth/csrf');
+    config.headers['X-XSRF-TOKEN'] = data.token;
+  }
   return config;
 });
 
@@ -15,6 +23,10 @@ export function errorText(error) {
 }
 
 export const api = {
+  me: () => http.get('/auth/me').then(r => r.data),
+  login: (data) => http.post('/auth/login', data).then(r => r.data),
+  register: (data) => http.post('/auth/register', data).then(r => r.data),
+  logout: () => http.post('/auth/logout'),
   users: () => http.get('/users/demo').then((r) => r.data),
   catalog: (params) => http.get('/recipes', { params }).then((r) => r.data),
   one: (id) => http.get(`/recipes/${id}`).then((r) => r.data),
