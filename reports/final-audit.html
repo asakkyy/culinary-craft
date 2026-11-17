@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Итоговый аудит Culinary Craft</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.6 system-ui, sans-serif; color: #1a2921; background: #f4f7f4; }
+    body { box-sizing: border-box; max-width: 60rem; margin: auto; padding: clamp(1rem, 5vw, 3.5rem); }
+    header { padding-bottom: 1.25rem; border-bottom: 2px solid #296344; }
+    h1, h2 { line-height: 1.18; text-wrap: balance; }
+    h1 { margin: .3rem 0 .8rem; font: 700 clamp(2rem, 5vw, 3.25rem)/1.08 Georgia, serif; }
+    h2 { margin: 2rem 0 .8rem; font-size: 1.3rem; }
+    p, li { max-width: 74ch; }
+    li + li { margin-top: .35rem; }
+    ul { padding-inline-start: 1.3rem; }
+    table { width: 100%; border-collapse: collapse; background: #fff; font-variant-numeric: tabular-nums; }
+    caption { padding: .7rem 0; text-align: start; color: #4a5d51; }
+    th, td { padding: .55rem .7rem; border-bottom: 1px solid #d4dfd6; text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+    thead, th[scope="row"] { font-weight: 650; }
+    dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: .75rem; }
+    dl div { padding: .65rem .8rem; border: 1px solid #d4dfd6; background: #fff; }
+    dt, time, small { color: #4a5d51; }
+    dd { margin: 0; font-size: 1.5rem; font-weight: 700; }
+    .pass { color: #185934; }
+    .partial { color: #794711; }
+    a { color: #154c34; text-underline-offset: .16em; }
+    :focus-visible { outline: 2px solid #255f83; outline-offset: 3px; }
+    code { overflow-wrap: anywhere; font-size: .94em; }
+    footer { padding: 1.2rem 0 0; margin-top: 2rem; border-top: 1px solid #b9c7bd; }
+  </style>
+</head>
+<body>
+  <header>
+    <time datetime="2026-11-18">18 ноября 2026</time>
+    <h1>Итоговый аудит Culinary Craft</h1>
+    <p>Ветка <code>feature/complete-ui-redesign</code>. Проверены основные пользовательские и административные сценарии, исправления авторизации и воспроизводимость сборки после очистки проекта.</p>
+  </header>
+
+  <main>
+    <section aria-labelledby="requirements">
+      <h2 id="requirements">143 требования</h2>
+      <dl>
+        <div><dt>PASS</dt><dd class="pass">139</dd></div>
+        <div><dt>PARTIAL</dt><dd class="partial">3</dd></div>
+        <div><dt>FAIL</dt><dd>0</dd></div>
+        <div><dt>NOT VERIFIED</dt><dd>1</dd></div>
+      </dl>
+      <p>Для 142 пунктов есть результат проверки. <a href="../docs/ui-redesign-verification.md">Матрица требований и доказательств</a></p>
+    </section>
+
+    <section aria-labelledby="tests">
+      <h2 id="tests">Воспроизводимые проверки</h2>
+      <table>
+        <caption>Локальные результаты после очистки</caption>
+        <thead><tr><th scope="col">Проверка</th><th scope="col">Результат</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Gradle и JUnit</th><td>79/79, 0 ошибок и пропусков. Пройдены Checkstyle, Flyway, сборка JAR и JaCoCo с 94,85% покрытия строк.</td></tr>
+          <tr><th scope="row">ESLint и Vite</th><td>0 ошибок и предупреждений ESLint. Production build прошёл.</td></tr>
+          <tr><th scope="row">Vitest 5.1.0</th><td>88/88 в 17 файлах. Строки 78,62%, выражения 75,23%, ветвления 75,21%, функции 61,26%. Пороги соблюдены.</td></tr>
+          <tr><th scope="row">Chromium</th><td>19/19 после очистки.</td></tr>
+          <tr><th scope="row">Firefox</th><td>19/19 после очистки.</td></tr>
+          <tr><th scope="row">WebKit</th><td>19/19 после очистки.</td></tr>
+          <tr><th scope="row">Скрипты CI</th><td>Локальные Commit Check и сбор метрик с <code>--require-complete</code> прошли. Три workflow разобраны как YAML.</td></tr>
+        </tbody>
+      </table>
+      <p>Playwright проверяет 375, 768, 1280 и 1920 px, включая доступность по правилам axe, управление фокусом и горизонтальную прокрутку. Использованы новые базы PostgreSQL 17, отдельный Mailpit и временный MEDIA_ROOT. В тестах отключалась фоновая очистка медиа. Новых скриншотов 0.</p>
+    </section>
+
+    <section aria-labelledby="security">
+      <h2 id="security">Безопасность и исправления</h2>
+      <ul>
+        <li>Неподтверждённый ADMIN получает 403 на защищённых административных POST. Подтверждённый ADMIN выполняет разрешённые операции. Доступ USER ограничен сервером.</li>
+        <li>Смена email удаляет прежние токены в той же транзакции. Ссылки остаются недействительными после возврата к исходному адресу. Тесты подтверждают одноразовость и истечение срока.</li>
+        <li>Восстановленные исправления UI покрывают сохранение фильтров и пагинации после обновления, стабильную SQL-сортировку, фокус меню и диалогов, устаревшие ответы React и повторную загрузку после ошибок.</li>
+        <li>Проверены CSRF, атрибуты cookie, проверка JWT, отзыв сессии при блокировке и выходе. В DTO секреты скрыты, отправка почты выполняется после commit, токены хранятся как хеши.</li>
+        <li>Проверка сигнатур секретов в текущем коде и доступной истории совпадений не обнаружила. Обновление Vitest убрало две критические записи npm audit из тестовой цепочки.</li>
+        <li>Остались шесть записей high в dev-цепочке picomatch, включая зависимые пакеты. В production-цепочке остались две moderate по React Router. Проверены исходники перехода после входа. Приложение использует клиентский роутинг.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="cleanup">
+      <h2 id="cleanup">Очистка</h2>
+      <p>Удалены <code>reports/ui/</code>, <code>reports/ui-final/</code>, <code>reports/ci-fix-summary/</code>, <code>reports/ci-fix-incomplete/</code>, копии отчётов <code>reports/backend/</code>, старые результаты Playwright и 40 диагностических логов hardening. Всего среди удалённых результатов 543 скриншота. Удалены одноразовые материалы <code>.local-tools/ci-debug/</code> и список <code>docs/ui-redesign-files.txt</code>.</p>
+      <p>Сохранены приложение, тесты, миграции, Husky, скрипты метрик и релизов, отчёты покрытия в CI, Commit Check и Quality Gate. Пользовательские PostgreSQL, Docker volumes, медиа и stash сохранились. Происхождение корневого <code>debug.log</code> неоднозначно. Файл остаётся локальным под <code>.gitignore</code>.</p>
+      <p><code>.gitignore</code> исключает локальные варианты <code>.env.*</code> с исключениями для шаблонов. У <code>reports/</code> есть явное исключение для этого HTML.</p>
+    </section>
+
+    <section aria-labelledby="limits">
+      <h2 id="limits">Ограничения</h2>
+      <ul>
+        <li>H17 — выборочно проверены состояния загрузки, пустых данных и ошибок. Полного перебора состояний каждого маршрута нет.</li>
+        <li>K09 и K10 — выполнены автоматические проверки axe и клавиатурные сценарии. Ручная проверка экранным диктором, физическим сенсорным устройством и на 400% масштабе остаётся открытой.</li>
+        <li>L08 — Commit Check выполнен локально. GitHub запускает соответствующую проверку при открытии PR.</li>
+        <li>Матрица восстановлена из 143 строк предыдущего аудита. Отдельный файл исходного ТЗ в рабочей ветке не найден.</li>
+        <li>Предупреждение редактора о несохранённом черновике работает при закрытии или перезагрузке вкладки. Внутренняя навигация может потерять черновик.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="commits">
+      <h2 id="commits">Коммиты</h2>
+      <p>На старте ветка опережала origin на три коммита. Индекс и отслеживаемые файлы были чистыми. Матрица оставалась неотслеживаемой.</p>
+      <ul>
+        <li><code>2e55acc</code>, <code>33071e7</code>, <code>d0ed626</code>, <code>03032c9</code> — административные операции, редизайн, фокус диалогов и дизайн-документ.</li>
+        <li><code>5808d23</code>, <code>8179dbb</code>, <code>bae7b68</code> — защита записей, email-токены, React, адаптивность, сортировка и E2E.</li>
+        <li><code>d83cd89</code> — обновление Vitest и V8 coverage.</li>
+        <li><code>e2d2a20</code> — воспроизводимый браузерный прогон без визуальных артефактов.</li>
+        <li><code>chore: remove obsolete UI audit artifacts</code> — очистка и итоговые документы.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Готовность.</strong> Ветку можно отправить на ревью в PR к dev. Для слияния требуются результаты обязательных проверок в GitHub и решение по открытым ограничениям.</p>
+    <p><a href="https://github.com/asakkyy/culinary-craft/compare/dev...feature/complete-ui-redesign?expand=1">Сравнение с dev для ручного создания PR</a></p>
+  </footer>
+</body>
+</html>

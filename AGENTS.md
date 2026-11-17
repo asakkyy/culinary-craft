@@ -96,7 +96,7 @@ GitHub: https://github.com/asakkyy/culinary-craft
 | Backend test/quality | JUnit 5, Spring Boot Test, MockMvc, Testcontainers PostgreSQL, Checkstyle, JaCoCo |
 | Frontend | React **18**, React Router **6**, Vite **6**, JavaScript/JSX |
 | Frontend API/state | Axios, React Context (`AppContext`), HttpOnly JWT cookie + CSRF |
-| Frontend test/quality | Vitest **3**, React Testing Library, Playwright + Chromium, ESLint, Prettier, V8 coverage |
+| Frontend test/quality | Vitest **5**, React Testing Library, Playwright (Chromium в CI, локально также Firefox и WebKit), ESLint, Prettier, V8 coverage |
 | Automation | GitHub Actions, Husky, Commitlint, Python-скрипты метрик |
 | Storage | PostgreSQL **17**, Spring Data JPA, SQL-миграции Flyway; локально Docker Compose |
 | Auth | Spring Security/Nimbus JWT, BCrypt, роли USER/ADMIN, статус и token_version в БД |
@@ -238,7 +238,7 @@ culinary-craft/
 ## 7. Среда и локальные команды (Windows PowerShell)
 
 Предпочтительная среда пользователя: **Windows + VS Code + PowerShell**.
-Предпосылки: JDK 17 или 21, Node.js 22, npm, Git, Docker Desktop с Linux engine и Compose v2; Python 3 при работе с метриками. Для Gradle используется wrapper из `backend/`, отдельная установка Gradle не нужна. Если PowerShell блокирует `npm.ps1`, используй `npm.cmd` и `npx.cmd`.
+Предпосылки: JDK 17 или 21, Node.js 22.12+ в ветке 22, npm, Git, Docker Desktop с Linux engine и Compose v2; Python 3 при работе с метриками. Для Gradle используется wrapper из `backend/`, отдельная установка Gradle не нужна. Если PowerShell блокирует `npm.ps1`, используй `npm.cmd` и `npx.cmd`.
 
 Перед backend из корня запусти PostgreSQL:
 ```powershell
@@ -302,7 +302,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 - Конфигурация автоматически запускает backend (`bootRun`) и frontend (`npm run dev`) по необходимости.
-- Перед E2E нужен PostgreSQL: локально `docker compose up -d --wait postgres`, в CI отдельный service в job `e2e`. E2E записывает данные в выбранную БД.
+- Перед E2E нужны отдельные PostgreSQL и Mailpit. Укажи свежую тестовую базу в `E2E_DB_URL`. В CI оба сервиса поднимает job `e2e`.
+- По умолчанию используется Chromium. Локально после установки движков можно выбрать Firefox или WebKit через `E2E_BROWSER=firefox` или `E2E_BROWSER=webkit`. Для каждого запуска нужна свежая база.
 - Проверяет реальный браузер и реальные HTTP-запросы.
 - Если уже работающие серверы на 8080/5173 принадлежат другому проекту, закрой их перед тестированием.
 - HTML-отчёт: `frontend/playwright-report/index.html`; JUnit XML: `frontend/reports/frontend/tests/playwright-junit.xml`.

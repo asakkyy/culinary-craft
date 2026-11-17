@@ -271,14 +271,13 @@ E2E_MAILPIT_URL (http://127.0.0.1:8025) позволяют выбрать тес
 загрузки продолжают обслуживаться через MediaService. Новый интерфейс не меняет
 JWT/CSRF, отзыв сессий, блокировки, правила очистки файлов и Flyway-миграции.
 
-Аудит и дизайн-направление: [docs/ui-redesign.md](docs/ui-redesign.md).
-Сравнительные снимки и логи локального прогона: `reports/ui/` (не коммитятся).
-Воспроизводимая проверка четырёх ширин и пользовательских сценариев находится
-в `frontend/tests/e2e/redesign.spec.js` и `user-journeys.spec.js`.
+Дизайн и продуктовые решения описаны в [docs/ui-redesign.md](docs/ui-redesign.md).
+Результаты проверок доступны в [итоговом отчёте](reports/final-audit.html)
+и [матрице требований](docs/ui-redesign-verification.md).
 
 ## Окружение
 
-- Windows, PowerShell, Git, JDK 17 или 21, Node.js 22 и npm.
+- Windows, PowerShell, Git, JDK 17 или 21, Node.js 22.12+ в ветке 22 и npm.
 - Docker Desktop с запущенным Linux engine и Docker Compose v2.
 - Python 3 нужен только для скриптов сводных метрик.
 - Gradle устанавливать отдельно не нужно: используется wrapper из `backend/`.
@@ -432,19 +431,27 @@ npm.cmd run test:ci
 npm.cmd run build
 ```
 
-E2E: сначала из корня запустите PostgreSQL, затем из `frontend/`:
+Для E2E запустите отдельные PostgreSQL и Mailpit. Укажите свежую тестовую базу
+в `E2E_DB_URL` и запустите из `frontend/`:
 
 ```powershell
 npx.cmd playwright install chromium
 npm.cmd run test:e2e
 ```
 
+Для Firefox или WebKit установите нужные движки через
+`npx.cmd playwright install firefox webkit` и задайте
+`$env:E2E_BROWSER = 'firefox'` либо `'webkit'` перед повторным запуском
+с отдельной свежей базой. По умолчанию используется Chromium.
+
 Playwright сам запускает backend/frontend и использует настоящую БД. Он создаёт
 аккаунты, рецепты и жалобы только в отдельной свежей БД из `E2E_DB_URL`.
 Каталог изображений для E2E создаётся во временной папке ОС. Не используйте серверы другого проекта
 на 8080/5173. В CI JUnit использует Testcontainers, а E2E — отдельный PostgreSQL service.
 
-Пороги сохранены: JaCoCo — 35% строк; Vitest — 30% строк/выражений/функций.
+Прогон проверяет адаптивность на 375, 768, 1280 и 1920 px без снимков,
+видеозаписи и трассировок. Пороги покрытия составляют 35% строк для JaCoCo
+и 30% строк, выражений и функций для Vitest.
 Отчёты: `backend/build/reports/`, `frontend/reports/frontend/`,
 `frontend/playwright-report/`. Quality Gate по-прежнему требует успешных backend,
 frontend, E2E и metrics. Release workflow не изменён.

@@ -7,6 +7,11 @@ dist/
 build/
 **/build/
 .env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
 *.log
 .idea/
 .vscode/
@@ -20,7 +25,8 @@ frontend/test-results/
 frontend/playwright-report/
 backend/reports/
 backend/bin/
-reports/
+/reports/*
+!/reports/final-audit.html
 ci-input/
 *.pyc
 __pycache__/

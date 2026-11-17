@@ -22,7 +22,6 @@ existing green accent remains. No paid services or generated images were used.
 
 ## Audit: observed signs and locations
 
-Baseline screenshots were captured in Chromium at 1280, 768 and 375 px before edits.
 The audit covered catalog, recipe, editor, profile, settings, authentication,
 verification, reports, moderation and administration.
 
@@ -103,32 +102,13 @@ browser tests require a fresh isolated PostgreSQL database and local Mailpit.
 The redesign does not alter CI configuration or coverage thresholds.
 
 - Source images and provenance: `frontend/public/images/recipes/README.md`.
-- Original screenshots: `reports/ui/before-*.png`.
-- Final screenshots: `frontend/test-results/redesign-*/after-*.png`.
-- Comparison artifacts and validation logs: `reports/ui/`.
-- Tests: `frontend/tests/e2e/redesign.spec.js`, existing user journeys, component
-  tests alongside pages/components, `AccountEmailTest`, `AdministrationApiTest`.
-- Full changed-file inventory: [ui-redesign-files.txt](ui-redesign-files.txt).
+- Current results: [final audit](../reports/final-audit.html) and
+  [requirements matrix](ui-redesign-verification.md).
+- Tests: `frontend/tests/e2e/`, component tests alongside pages and components,
+  `AccountEmailTest`, `AdministrationApiTest`.
 
-The automated layout check covers 375, 768, 1280 and 1920 px, and the screenshots
-are visually inspected. This is not a formal WCAG certification or a cross-browser
-Safari/Firefox audit. Existing personal recipe lists and the pending queue retain
-their previous unpaginated backend contracts. External user image URLs can still fail;
-missing images use a neutral fallback. SMTP delivery still has its documented
-post-commit failure window; there is no plaintext-token outbox.
-
-Validated on 17 November 2026:
-
-- ESLint: passed, zero warnings.
-- Vitest with coverage: 72 tests passed; line coverage 85.38%, thresholds unchanged.
-- Vite production build: passed.
-- Gradle `check bootJar`: passed; 73 backend tests, zero failures; Checkstyle and
-  JaCoCo verification passed.
-- Playwright with real isolated PostgreSQL/Mailpit: 12 scenarios passed.
-- 59 final viewport screenshots captured; no page overflow at the four requested
-  widths, no JavaScript runtime errors during the visual test.
-- Modal review and account-menu screenshots accompany the viewport set. Browser
-  tests check focus containment, Escape and restoration of focus to the opener,
-  including React StrictMode's repeated effect setup/cleanup.
-- `reports/ui/comparison.html` provides before/after comparisons; final images are
-  also copied into `reports/ui/after/` so later test runs do not overwrite them.
+The automated layout check covers 375, 768, 1280 and 1920 px. Browser tests
+exercise focus containment, Escape and restoration of focus to the opener.
+Existing personal recipe lists and the pending queue retain their unpaginated
+backend contracts. Missing images use a neutral fallback. SMTP delivery still
+has its documented post-commit failure window.
