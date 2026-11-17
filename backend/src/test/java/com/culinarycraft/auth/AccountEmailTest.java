@@ -16,6 +16,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 class AccountEmailTest extends PostgresIntegrationTest {
     @Autowired AccountService accounts;
     @Autowired AccountEmailService emails;
+    @Autowired ProfileService profiles;
     @Autowired DemoUserRepository users;
     @Autowired ApplicationEvents events;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
@@ -23,10 +24,58 @@ class AccountEmailTest extends PostgresIntegrationTest {
     @Autowired TokenService tokens;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private final String password = "Original secure password 123";
-    private AccountView register() { return accounts.register(new AccountService.Registration("Author", "mail@example.test", password)); }
+    private AccountView register() {
+        var account = accounts.register(new AccountService.Registration("Author", "mail@example.test", password));
+        assertEquals(0, events.stream(AccountEmailService.Mail.class).count());
+        emails.request(account.email(), "VERIFY");
+        return account;
+    }
+    @Test void registrationLoginAndEmailChangeNeverSendMailAutomatically() throws Exception {
+        var user = accounts.register(new AccountService.Registration("Author", "explicit@example.test", password));
+        accounts.login(new AccountService.Login(user.email(), password));
+        profiles.email(user.id(), new ProfileService.Email("new-address@example.test", password));
+        assertEquals(0, events.stream(AccountEmailService.Mail.class).count());
+        assertEquals(0, jdbc.queryForObject("select count(*) from account_email_tokens where user_id = ?", Integer.class, user.id()));
+        mvc.perform(post("/api/auth/verification/request").with(csrf()).contentType("application/json")
+            .content("{\"email\":\"new-address@example.test\"}")).andExpect(status().isAccepted());
+        assertEquals(1, events.stream(AccountEmailService.Mail.class).count());
+        assertFalse(accounts.me(user.id()).emailVerified());
+        mvc.perform(post("/api/auth/verification/request").contentType("application/json")
+            .content("{\"email\":\"new-address@example.test\"}")).andExpect(status().isForbidden());
+    }
     private String token() {
         var text = events.stream(AccountEmailService.Mail.class).reduce((first, second) -> second).orElseThrow().text();
         return text.substring(text.indexOf("#token=") + 7).split("\n")[0];
+    }
+    @Test void changingEmailInvalidatesOldLinksEvenWhenReturningToTheOriginalAddress() {
+        var user = register(); String oldVerification = token();
+        emails.request(user.email(), "RESET"); String oldReset = token();
+        profiles.email(user.id(), new ProfileService.Email("replacement@example.test", password));
+        profiles.email(user.id(), new ProfileService.Email(user.email(), password));
+        assertFalse(accounts.me(user.id()).emailVerified());
+        assertEquals(0, jdbc.queryForObject("select count(*) from account_email_tokens where user_id = ?", Integer.class, user.id()));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.verify(oldVerification));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.reset(new AccountEmailService.Reset(oldReset, password)));
+    }
+    @Test void logoutInvalidatesVerificationAndResetLinks() {
+        var user = register(); String verification = token();
+        emails.request(user.email(), "RESET"); String reset = token();
+        accounts.logout(user.id());
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.verify(verification));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.reset(new AccountEmailService.Reset(reset, password)));
+    }
+    @Test void explicitVerificationRequestsKeepTheDailyLimitAcrossMinuteWindows() {
+        var user = accounts.register(new AccountService.Registration("Author", "daily@example.test", password));
+        var separate = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        separate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        String minuteBucket = AccountEmailService.hash("email-VERIFY:" + user.email());
+        for (int attempt = 1; attempt <= 6; attempt++) {
+            emails.request(user.email(), "VERIFY");
+            assertEquals(Math.min(attempt, 5), events.stream(AccountEmailService.Mail.class).count());
+            // Advance only this minute bucket in the isolated Testcontainers database; retain the daily count.
+            separate.executeWithoutResult(status -> jdbc.update(
+                "update authentication_limits set window_start = current_timestamp - interval '2 minutes' where bucket = ?", minuteBucket));
+        }
     }
     @Test void secretDtosDoNotDisclosePasswordsOrTokensInDebugMessages() {
         assertEquals("Registration[redacted]", new AccountService.Registration("Author", "mail@example.test", password).toString());

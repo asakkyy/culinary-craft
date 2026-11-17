@@ -145,6 +145,21 @@ public class RecipeService {
         return view(store.save(changed), userId);
     }
 
+    @Transactional
+    public RecipeView unpublish(long id, Long userId, String reason) {
+        users.requireAdmin(userId);
+        if (reason == null || reason.strip().length() < 3 || reason.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину снятия с публикации");
+        }
+        Recipe r = locked(id);
+        if (!"APPROVED".equals(r.status())) throw new ResponseStatusException(HttpStatus.CONFLICT, "Рецепт уже не опубликован");
+        Recipe changed = new Recipe(r.id(), r.title(), r.description(), r.category(), r.emoji(),
+            r.imageUrl(), r.prepMinutes(), r.servings(), r.difficulty(), r.ingredients(), r.steps(), r.tags(),
+            r.ownerId(), r.ownerName(), "PENDING", r.createdAt());
+        audit.record(userId, com.culinarycraft.admin.AuditEvent.Action.RECIPE_UNPUBLISHED, "RECIPE", id, reason.strip());
+        return view(store.save(changed), userId);
+    }
+
     private Recipe required(long id) {
         return store.get(id).orElseThrow(() ->
             new ResponseStatusException(HttpStatus.NOT_FOUND, "Рецепт не найден"));

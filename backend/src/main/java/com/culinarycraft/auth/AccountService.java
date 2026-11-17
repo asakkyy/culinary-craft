@@ -24,11 +24,9 @@ public class AccountService {
     private final DemoUserRepository users;
     private final PasswordEncoder passwords;
     private final String dummyHash;
-    private final AccountEmailService emails;
 
-    public AccountService(DemoUserRepository users, PasswordEncoder passwords, AccountEmailService emails) {
+    public AccountService(DemoUserRepository users, PasswordEncoder passwords) {
         this.users = users; this.passwords = passwords;
-        this.emails = emails;
         dummyHash = passwords.encode(java.util.UUID.randomUUID().toString());
     }
     public AccountView register(Registration request) {
@@ -42,7 +40,6 @@ public class AccountService {
         }
         try {
             var account = users.saveAndFlush(DemoUserEntity.account(request.name().strip(), email, hash, "USER"));
-            emails.verification(account.getId());
             return AccountView.of(account);
         } catch (org.springframework.dao.DataIntegrityViolationException error) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");

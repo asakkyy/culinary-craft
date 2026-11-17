@@ -27,7 +27,7 @@ public class AuthController {
     public java.util.Map<String, String> register(@Valid @RequestBody AccountService.Registration request) {
         try { accounts.register(request); }
         catch (org.springframework.web.server.ResponseStatusException error) { if (error.getStatusCode().value() != 409) throw error; }
-        return AccountEmailController.accepted();
+        return java.util.Map.of("message", "Запрос регистрации обработан. Войдите в аккаунт, чтобы запросить подтверждение email");
     }
     @PostMapping("/login") public AccountView login(@Valid @RequestBody AccountService.Login request, HttpServletResponse response) {
         if (!limits.allow("login-account", request.email().strip().toLowerCase(java.util.Locale.ROOT), 10, 600)) {

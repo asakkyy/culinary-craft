@@ -18,6 +18,30 @@ class ConcurrentReportTest extends PostgresIntegrationTest {
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentBlocksCannotRemoveTheLastActiveAdministrator() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        long before = users.countByRoleAndStatus("ADMIN", "ACTIVE");
+        var first = users.saveAndFlush(DemoUserEntity.account("First admin", "first" + suffix + "@test.invalid", passwords.encode("Test password 123"), "ADMIN"));
+        var second = users.saveAndFlush(DemoUserEntity.account("Second admin", "second" + suffix + "@test.invalid", passwords.encode("Test password 123"), "ADMIN"));
+        var executor = Executors.newFixedThreadPool(2); var start = new CountDownLatch(1);
+        try {
+            java.util.function.BiFunction<Long, Long, Callable<Integer>> block = (actor, target) -> () -> {
+                start.await();
+                try { service.block(actor, target, true, "Конкурентная блокировка"); return 200; }
+                catch (ResponseStatusException error) { return error.getStatusCode().value(); }
+            };
+            var a = executor.submit(block.apply(first.getId(), second.getId()));
+            var b = executor.submit(block.apply(second.getId(), first.getId())); start.countDown();
+            assertEquals(List.of(200, 403), List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS)).stream().sorted().toList());
+            assertEquals(before + 1, users.countByRoleAndStatus("ADMIN", "ACTIVE"));
+        } finally {
+            executor.shutdownNow(); assertTrue(executor.awaitTermination(20, TimeUnit.SECONDS));
+            jdbc.update("delete from administrative_audit where admin_id in (?, ?)", first.getId(), second.getId());
+            jdbc.update("delete from demo_users where id in (?, ?)", first.getId(), second.getId());
+        }
+    }
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void onlyOneAdministratorCanCommitADecision() throws Exception {
         String suffix = UUID.randomUUID().toString();
         long reporter = users.saveAndFlush(DemoUserEntity.account("Reporter", "r" + suffix + "@test.invalid", passwords.encode("Test password 123"), "USER")).getId();

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ModerationPage from './ModerationPage';
 import { api } from '../api/client';
@@ -39,5 +39,7 @@ it('может отклонить заявку', async () => {
   const user = userEvent.setup();
   renderPage(<ModerationPage />);
   await user.click(await screen.findByRole('button', { name: 'Отклонить' }));
+  expect(api.moderate).not.toHaveBeenCalled();
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Отклонить', exact: true }));
   await waitFor(() => expect(api.moderate).toHaveBeenCalledWith(123, 'REJECTED'));
 });

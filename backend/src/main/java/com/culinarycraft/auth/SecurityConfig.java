@@ -50,7 +50,7 @@ public class SecurityConfig {
         })).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .csrf(csrf -> csrf.csrfTokenRepository(csrfCookies))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/recipes/**", "/api/reports").access(verified)
+                .requestMatchers(HttpMethod.POST, "/api/recipes/**", "/api/reports", "/api/admin/**").access(verified)
                 .requestMatchers(HttpMethod.PUT, "/api/recipes/**").access(verified)
                 .requestMatchers(HttpMethod.DELETE, "/api/recipes/**").access(verified)
                 .requestMatchers("/api/admin/**", "/api/reports/**", "/api/account/**").authenticated()

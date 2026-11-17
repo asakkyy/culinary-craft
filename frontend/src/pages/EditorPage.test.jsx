@@ -21,7 +21,7 @@ beforeEach(() => {
 it('неавторизованный гость не видит форму создания', () => {
   useApp.mockReturnValue({ user: null, setPickerOpen: vi.fn() });
   renderPage(<EditorPage />);
-  expect(screen.getByText('Авторизуйся в демо-режиме')).toBeInTheDocument();
+  expect(screen.getByText('Войдите, чтобы создать рецепт')).toBeInTheDocument();
 });
 
 it('динамически добавляет ингредиенты и шаги', async () => {
@@ -41,6 +41,9 @@ it('валидирует ингредиенты и шаги на уровне ф
   await user.click(screen.getByRole('button', { name: 'Отправить рецепт' }));
   expect(await screen.findByText('Добавь хотя бы один ингредиент и один шаг.')).toBeInTheDocument();
   expect(api.create).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveFocus();
+  await user.type(screen.getByRole('textbox', { name: 'Ингредиент 1' }), 'Морковь');
+  expect(screen.getByRole('textbox', { name: 'Ингредиент 1' })).toHaveFocus();
 });
 
 it('отправляет данные формы в API для модерации', async () => {
@@ -52,15 +55,38 @@ it('отправляет данные формы в API для модераци�
   await user.type(screen.getByRole('textbox', { name: 'Шаг 1' }), 'Нарезать овощи');
   await user.type(screen.getByLabelText('Теги через запятую'), 'Домашнее, Быстро');
   await user.click(screen.getByRole('button', { name: 'Отправить рецепт' }));
-  await waitFor(() => expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
-    title: 'Домашний суп', ingredients: ['Морковь'], steps: ['Нарезать овощи'], tags: ['Домашнее', 'Быстро'],
-  })));
+  await waitFor(() =>
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Домашний суп',
+        ingredients: ['Морковь'],
+        steps: ['Нарезать овощи'],
+        tags: ['Домашнее', 'Быстро'],
+      }),
+    ),
+  );
 });
 
 it('загружает существующий рецепт для редактирования', async () => {
-  render(<MemoryRouter initialEntries={['/recipes/123/edit']}><Routes>
-    <Route path="/recipes/:id/edit" element={<EditorPage />} />
-  </Routes></MemoryRouter>);
+  render(
+    <MemoryRouter initialEntries={['/recipes/123/edit']}>
+      <Routes>
+        <Route path="/recipes/:id/edit" element={<EditorPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
   expect(await screen.findByDisplayValue('Тестовый домашний суп')).toBeInTheDocument();
   expect(api.one).toHaveBeenCalledWith('123');
+});
+it('не показывает пустую форму редактирования после ошибки загрузки', async () => {
+  api.one.mockRejectedValueOnce(new Error('Рецепт не найден'));
+  render(
+    <MemoryRouter initialEntries={['/recipes/404/edit']}>
+      <Routes>
+        <Route path="/recipes/:id/edit" element={<EditorPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent('Рецепт не найден');
+  expect(screen.queryByRole('button', { name: 'Сохранить изменения' })).not.toBeInTheDocument();
 });
