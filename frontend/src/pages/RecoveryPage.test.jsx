@@ -4,8 +4,11 @@ import userEvent from '@testing-library/user-event';
 import RecoveryPage from './RecoveryPage';
 import { api } from '../api/client';
 import { renderPage } from '../test/testHelpers';
+import { useApp } from '../context/AppContext';
+vi.mock('../context/AppContext', () => ({ useApp: vi.fn() }));
+const forgetUser = vi.fn();
 vi.mock('../api/client', () => ({ api: { requestPassword: vi.fn(), requestVerification: vi.fn(), verifyEmail: vi.fn(), resetPassword: vi.fn() }, errorText: e => e.message }));
-beforeEach(() => window.history.replaceState(null, '', '/'));
+beforeEach(() => { window.history.replaceState(null, '', '/'); useApp.mockReturnValue({ forgetUser }); });
 it('запрашивает восстановление и показывает нейтральное подтверждение', async () => {
   api.requestPassword.mockResolvedValueOnce({ message: 'Если адрес подходит, письмо будет отправлено' });
   renderPage(<RecoveryPage mode="forgot"/>); const user = userEvent.setup();
@@ -28,6 +31,7 @@ it('восстанавливает пароль по токену', async () => 
   await user.type(screen.getByLabelText('Новый пароль'), 'A new password 12345');
   await user.click(screen.getByRole('button', { name: 'Сохранить новый пароль' }));
   expect(api.resetPassword).toHaveBeenCalledWith({ token: 'reset-secret', password: 'A new password 12345' });
+  expect(forgetUser).toHaveBeenCalled();
   expect(await screen.findByRole('status')).toHaveTextContent('Старые сессии отозваны');
 });
 it('показывает истёкшую ссылку и доступ к повторной отправке', async () => {

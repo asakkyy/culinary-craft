@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, errorText } from '../api/client';
+import { useApp } from '../context/AppContext';
 
 export default function RecoveryPage({ mode }) {
+  const app = useApp();
   const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token') || '');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [message, setMessage] = useState('');
@@ -14,7 +16,8 @@ export default function RecoveryPage({ mode }) {
       if (mode === 'forgot' || mode === 'resend') {
         const result = await (mode === 'forgot' ? api.requestPassword({ email }) : api.requestVerification({ email })); setMessage(result.message);
       } else {
-        if (mode === 'verify') await api.verifyEmail({ token }); else await api.resetPassword({ token, password });
+        if (mode === 'verify') await api.verifyEmail({ token });
+        else { await api.resetPassword({ token, password }); app?.forgetUser(); }
         setPassword(''); setMessage(mode === 'verify' ? 'Email подтверждён. Обновите страницу профиля или войдите в аккаунт.' : 'Пароль изменён. Войдите с новым паролем. Старые сессии отозваны.');
       }
     } catch (err) { setError(errorText(err)); } finally { setBusy(false); }

@@ -58,7 +58,9 @@ class AccountEmailTest extends PostgresIntegrationTest {
         String unknown = mvc.perform(post("/api/auth/password/request").with(csrf()).contentType("application/json").content("{\"email\":\"unknown@example.test\"}"))
             .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         assertEquals(known, unknown);
-        emails.reset(new AccountEmailService.Reset(token, "Replacement secure password 456"));
+        mvc.perform(post("/api/auth/password/reset").with(csrf()).contentType("application/json")
+            .content(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(new AccountEmailService.Reset(token, "Replacement secure password 456"))))
+            .andExpect(status().isOk()).andExpect(cookie().maxAge("cc-session", 0));
         mvc.perform(get("/api/auth/me").cookie(cookie)).andExpect(status().isUnauthorized());
         assertNotNull(accounts.login(new AccountService.Login(user.email(), "Replacement secure password 456")));
         assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> emails.reset(new AccountEmailService.Reset(token, password)));

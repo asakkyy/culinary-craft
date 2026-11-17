@@ -208,7 +208,8 @@ test('Письмо восстановления меняет пароль и о�
   await page.getByRole('button', { name: 'Сохранить новый пароль' }).click();
   await expect(page.getByRole('status')).toContainText('Старые сессии отозваны');
   expect((await page.request.get('/api/auth/me')).status()).toBe(401);
-  await page.goto('/login'); await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByRole('link', { name: 'Вход', exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Пароль', { exact: true }).fill('Recovered password 45678');
   await page.getByRole('button', { name: 'Войти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
