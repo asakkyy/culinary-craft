@@ -42,6 +42,7 @@ public class RecipeEntity {
     protected RecipeEntity() {}
 
     public long getId() { return id; }
+    public void photo(String url) { imageUrl = url; status = "PENDING"; }
 
     public static RecipeEntity create(Recipe recipe, DemoUserEntity owner) {
         RecipeEntity entity = new RecipeEntity();
@@ -55,7 +56,7 @@ public class RecipeEntity {
         description = recipe.description();
         category = recipe.category();
         emoji = recipe.emoji();
-        imageUrl = recipe.imageUrl();
+        if (imageUrl == null || !imageUrl.startsWith("/api/media/")) imageUrl = recipe.imageUrl();
         prepMinutes = recipe.prepMinutes();
         servings = recipe.servings();
         difficulty = recipe.difficulty();

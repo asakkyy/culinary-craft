@@ -32,6 +32,9 @@ class PersistenceRestartTest {
     @Test
     void recipesReviewsFavoritesAndDeletionsSurviveApplicationRestart() {
         long id;
+        long mediaOwner;
+        java.util.UUID photoId;
+        byte[] photoBytes;
         try (var first = start()) {
             RecipeService service = first.getBean(RecipeService.class);
             var request = new RecipeRequest("Суп после перезапуска", "Подробное описание сохраняемого супа",
@@ -45,9 +48,24 @@ class PersistenceRestartTest {
             service.update(id, request, 1L);
             service.moderate(id, "APPROVED", 3L);
             service.delete(8, 2L);
+            var accounts = first.getBean(com.culinarycraft.auth.AccountService.class);
+            mediaOwner = accounts.register(new com.culinarycraft.auth.AccountService.Registration(
+                "Media owner", "media-restart@example.test", "Long media password 123")).id();
+            long mediaRecipe = service.create(request, mediaOwner).id();
+            var output = new java.io.ByteArrayOutputStream();
+            try {
+                javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(3, 2, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", output);
+            } catch (java.io.IOException error) { throw new IllegalStateException(error); }
+            var upload = new org.springframework.mock.web.MockMultipartFile("file", "cover.png", "image/png", output.toByteArray());
+            var media = first.getBean(com.culinarycraft.media.MediaService.class);
+            photoId = media.photo(mediaRecipe, mediaOwner, upload).id();
+            media.avatar(mediaOwner, upload);
+            photoBytes = media.read(photoId, mediaOwner);
         }
         // A completely new Spring context and connection pool use the same database.
         try (var second = start()) {
+            assertArrayEquals(photoBytes, second.getBean(com.culinarycraft.media.MediaService.class).read(photoId, mediaOwner));
+            assertNotNull(second.getBean(com.culinarycraft.auth.AccountService.class).me(mediaOwner).avatarUrl());
             RecipeService service = second.getBean(RecipeService.class);
             var recipe = service.get(id, 1L);
             assertEquals("Суп после перезапуска", recipe.title());
@@ -63,7 +81,7 @@ class PersistenceRestartTest {
             assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.get(8, 2L));
             assertEquals(8, service.catalog("", "Все рецепты", "newest", 0, 30, null).get("total"));
             var jdbc = second.getBean(JdbcTemplate.class);
-            assertEquals(3, jdbc.queryForObject(
+            assertEquals(5, jdbc.queryForObject(
                 "select count(*) from flyway_schema_history where success", Integer.class));
             service.delete(id, 1L);
             assertEquals(0, jdbc.queryForObject("select count(*) from reviews where recipe_id = ?", Integer.class, id));

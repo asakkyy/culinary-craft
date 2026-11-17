@@ -1,4 +1,5 @@
 import AuthForm from '../pages/AuthForm';
+import Avatar from './Avatar';
 import { useEffect } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, ChefHat, Heart, Plus, ShieldCheck, UserRound, X, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -28,10 +29,12 @@ export default function Layout({ children }) {
           <NavLink to="/favorites"><Heart size={17} /> Избранное</NavLink>
           <NavLink to="/profile"><BookOpen size={17} /> Моя кухня</NavLink>
           {user?.role === 'ADMIN' && <NavLink to="/moderation"><ShieldCheck size={17} /> Модерация</NavLink>}
+          <NavLink to="/reports">Мои жалобы</NavLink>
+          {user?.role === 'ADMIN' && <NavLink to="/admin">Управление</NavLink>}
         </nav>
         <div className="header-actions"><button className="btn btn-primary nav-create" onClick={handleCreate}><Plus size={18}/> Добавить рецепт</button>
           <button className="user-chip" onClick={() => setPickerOpen(true)} title="Выбрать демо-пользователя">
-            <span className="user-avatar small">{user?.initials || <UserRound size={18}/>}</span><span className="user-chip-name">{user ? user.name.split(' ')[0] : 'Гость'}</span><span className="tiny-chevron">⌄</span>
+            <Avatar user={user}/><span className="user-chip-name">{user ? user.name.split(' ')[0] : 'Гость'}</span><span className="tiny-chevron">⌄</span>
           </button></div>
       </div></header>
       <main>{children}</main>

@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Heart, Plus, Settings2, ShieldCheck } from 'lucid
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
 import RecipeCard from '../components/RecipeCard';
+import Avatar from '../components/Avatar';
 
 const labels = { PENDING: 'На модерации', REJECTED: 'Отклонён', APPROVED: 'Опубликован' };
 export default function ProfilePage({ view = 'mine' }) {
@@ -20,7 +21,7 @@ export default function ProfilePage({ view = 'mine' }) {
   }, [user, dataVersion]);
   if (!user) return <div className="container narrow-page"><div className="empty-state"><span>👋</span><h2>Добро пожаловать!</h2><p>Выбери демонстрационного пользователя, чтобы открыть свою кухню.</p><button className="btn btn-primary" onClick={() => setPickerOpen(true)}>Выбрать пользователя</button></div></div>;
   const list = view === 'favorites' ? favorites : mine;
-  return <div className="container profile-page"><div className="profile-cover"><span className="profile-deco one">✳</span><span className="profile-deco two">✴</span><div className="profile-avatar">{user.initials}</div><div><div className="eyebrow light">ЛИЧНОЕ ПРОСТРАНСТВО</div><h1>{user.name}</h1><p>{user.subtitle}</p></div><button className="btn btn-light profile-switch" onClick={() => setPickerOpen(true)}><Settings2 size={17}/> Сменить роль</button></div>
+  return <div className="container profile-page"><div className="profile-cover"><span className="profile-deco one">✳</span><span className="profile-deco two">✴</span><Avatar user={user} className="profile-avatar"/><div><div className="eyebrow light">ЛИЧНОЕ ПРОСТРАНСТВО</div><h1>{user.name}</h1><p>{user.email}</p><p>Регистрация: {user.registeredAt ? new Date(user.registeredAt).toLocaleDateString('ru-RU') : '—'} · {user.status}</p></div><button className="btn btn-light profile-switch" onClick={() => navigate('/settings')}><Settings2 size={17}/> Настройки аккаунта</button></div>
     <div className="profile-stats"><div><strong>{mine.length}</strong><span>Мои рецепты</span></div><div><strong>{favorites.length}</strong><span>Избранное</span></div><div><strong>{mine.filter((r) => r.status === 'APPROVED').length}</strong><span>Опубликовано</span></div></div>
     <div className="profile-content"><div className="section-heading compact"><div><div className="eyebrow muted">ТВОЯ КНИГА РЕЦЕПТОВ</div><h2>{view === 'favorites' ? 'Любимые рецепты' : 'Мои творения'}</h2></div><button className="btn btn-primary" onClick={() => navigate('/create')}><Plus size={18}/> Новый рецепт</button></div>
       <div className="profile-tabs"><Link to="/profile" className={view === 'mine' ? 'active' : ''}><BookOpen size={17}/> Мои рецепты</Link><Link to="/favorites" className={view === 'favorites' ? 'active' : ''}><Heart size={17}/> Избранное</Link>{user.role === 'ADMIN' && <Link to="/moderation"><ShieldCheck size={17}/> Модерация</Link>}</div>

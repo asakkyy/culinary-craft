@@ -50,5 +50,5 @@ public class AccountService {
         return account;
     }
     public AccountView me(long id) { return AccountView.of(users.findById(id).orElseThrow()); }
-    public void logout(long id) { users.findById(id).orElseThrow().revokeTokens(); }
+    public void logout(long id) { users.lockById(id).orElseThrow().revokeTokens(); }
 }

@@ -1,4 +1,82 @@
 import { test, expect } from '@playwright/test';
+test('Жалоба, решение, аудит и блокировка действующей сессии', async ({ page, browser }) => {
+  const suffix = Date.now(); const email = `reporter${suffix}@e2e.invalid`;
+  await page.goto('/register');
+  await page.getByLabel('Имя', { exact: true }).fill(`Заявитель ${suffix}`);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Report password 12345');
+  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await page.goto('/recipes/1');
+  await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
+  await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
+  await page.getByRole('button', { name: 'Отправить жалобу' }).click();
+  await expect(page.locator('.toast')).toHaveText(/Жалоба отправлена/);
+  await page.goto('/reports'); await expect(page.getByText(/Спам · Открыта/)).toBeVisible();
+  const adminContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  try {
+    const admin = await adminContext.newPage(); admin.on('dialog', dialog => dialog.accept());
+    await admin.goto('/login');
+    await admin.getByLabel('Email', { exact: true }).fill('admin@e2e.invalid');
+    await admin.getByLabel('Пароль', { exact: true }).fill(process.env.CC_E2E_ADMIN_PASSWORD);
+    await admin.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(admin.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+    await admin.goto('/admin');
+    await admin.getByRole('textbox', { name: 'Административный поиск' }).fill(email);
+    const report = admin.locator('article').filter({ hasText: `Заявитель ${suffix}` });
+    await report.locator('textarea').fill('Проверено администратором');
+    await report.getByRole('button', { name: 'Закрыть жалобу' }).click();
+    await expect(report).toContainText('Закрыта');
+    await page.reload(); await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
+    await admin.getByRole('button', { name: 'Аудит', exact: true }).click();
+    await expect(admin.getByText('REPORT_RESOLVED', { exact: true })).toBeVisible();
+    await admin.getByRole('button', { name: 'Пользователи', exact: true }).click();
+    await admin.getByRole('textbox', { name: 'Административный поиск' }).fill(email);
+    const row = admin.locator('article').filter({ hasText: email });
+    await row.getByLabel('Причина блокировки', { exact: false }).fill('Нарушение правил, E2E');
+    await row.getByRole('button', { name: 'Заблокировать', exact: true }).click();
+    await expect(row.getByRole('button', { name: 'Разблокировать', exact: true })).toBeVisible();
+    expect((await page.request.get('/api/recipes/mine')).status()).toBe(401);
+    await page.goto('/login');
+    await page.getByLabel('Email', { exact: true }).fill(email);
+    await page.getByLabel('Пароль', { exact: true }).fill('Report password 12345');
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByRole('alert')).toBeVisible();
+    await row.getByRole('button', { name: 'Разблокировать', exact: true }).click();
+    await expect(row.getByRole('button', { name: 'Заблокировать', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  } finally { await adminContext.close(); }
+});
+async function image(page) {
+  const data = await page.evaluate(() => { const c = document.createElement('canvas'); c.width=4; c.height=3; c.getContext('2d').fillRect(0,0,4,3); return c.toDataURL('image/png').split(',')[1]; });
+  return { name: 'test.png', mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
+}
+test('Настройки профиля и смена пароля с повторным входом', async ({ page }) => {
+  const email = `settings${Date.now()}@e2e.invalid`;
+  await page.goto('/register');
+  await page.getByLabel('Имя', { exact: true }).fill('Автор настроек');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Current password 123');
+  await page.getByRole('button', { name: 'Создать аккаунт' }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+  await page.goto('/settings');
+  await page.getByLabel('Аватар', { exact: true }).setInputFiles(await image(page));
+  await expect(page.locator('.user-chip img')).toBeVisible();
+  await page.getByLabel('Отображаемое имя').fill('Обновлённый автор');
+  await page.getByRole('button', { name: 'Сохранить имя' }).click();
+  await expect(page.locator('.toast')).toHaveText(/Изменения сохранены/);
+  await page.reload();
+  await expect(page.getByLabel('Отображаемое имя')).toHaveValue('Обновлённый автор');
+  await page.getByLabel('Текущий пароль', { exact: true }).fill('Current password 123');
+  await page.getByLabel('Новый пароль', { exact: true }).fill('Changed password 456');
+  await page.getByRole('button', { name: 'Изменить пароль' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Пароль', { exact: true }).fill('Changed password 456');
+  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Выйти', exact: true })).toBeVisible();
+});
 test('Гость открывает каталог и рецепт', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Поиск рецептов' }).fill('паста');
@@ -29,8 +107,10 @@ test('Регистрация, восстановление сессии, рец�
   await page.getByLabel(/Краткое описание/).fill('Описание настоящего авторского рецепта для браузерного теста');
   await page.getByRole('textbox', { name: 'Ингредиент 1' }).fill('Овощи — 200 г');
   await page.getByRole('textbox', { name: 'Шаг 1' }).fill('Нарезать и сварить');
+  await page.getByLabel('Фотография рецепта', { exact: true }).setInputFiles(await image(page));
   await page.getByRole('button', { name: 'Отправить рецепт' }).click();
   await expect(page).toHaveURL(/\/recipes\/\d+$/);
+  await expect(page.locator('.detail-cover img')).toHaveAttribute('src', /\/api\/media\//);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();

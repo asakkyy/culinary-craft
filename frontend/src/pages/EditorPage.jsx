@@ -1,3 +1,4 @@
+import ImageUpload from '../components/ImageUpload';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, ImagePlus, Minus, Plus, Save, Sparkles } from 'lucide-react';
@@ -10,6 +11,9 @@ const init = { title: '', description: '', category: 'Завтраки', emoji: 
 export default function EditorPage() {
   const { id } = useParams(); const edit = Boolean(id);
   const { user, setPickerOpen, notify, changed } = useApp();
+  const [photo, setPhoto] = useState(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [createdId, setCreatedId] = useState(null);
   const [form, setForm] = useState(init);
   const [loading, setLoading] = useState(edit);
   const [saving, setSaving] = useState(false);
@@ -36,7 +40,10 @@ export default function EditorPage() {
     const body = { ...form, ingredients, steps, tags: form.tags.split(',').map((s) => s.trim()).filter(Boolean), prepMinutes: Number(form.prepMinutes), servings: Number(form.servings) };
     setError(''); setSaving(true);
     try {
-      const saved = edit ? await api.update(id, body) : await api.create(body);
+      const saved = edit ? await api.update(id, body) : createdId ? await api.update(createdId, body) : await api.create(body);
+      setCreatedId(saved.id);
+      if (removePhoto) await api.deletePhoto(saved.id);
+      if (photo) await api.photo(saved.id, photo);
       changed(); notify('Рецепт отправлен на модерацию!'); navigate(`/recipes/${saved.id}`);
     } catch (err) { setError(errorText(err)); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     finally { setSaving(false); }
@@ -46,6 +53,8 @@ export default function EditorPage() {
   return <div className="container editor-page">
     <Link to={edit ? `/recipes/${id}` : '/profile'} className="back-link"><ArrowLeft size={17}/> Назад</Link>
     <div className="editor-heading"><div><div className="eyebrow muted"><Sparkles size={15}/> ТВОРИ НА СВОЕЙ КУХНЕ</div><h1>{edit ? 'Изменить рецепт' : 'Поделись своим рецептом'}</h1><p>Заполни ингредиенты и шаги, чтобы каждый смог повторить твоё блюдо.</p></div><div className="editor-illustration">👩‍🍳<span>♥</span></div></div>
+    <section className="editor-card"><ImageUpload label="Фотография рецепта" url={removePhoto ? '' : form.imageUrl} busy={saving}
+      onFile={file => { setPhoto(file); setRemovePhoto(false); }} onDelete={() => { setPhoto(null); setRemovePhoto(true); }}/></section>
     {error && <div className="error-box"><strong>Проверь данные формы</strong><p>{error}</p></div>}
     <form className="editor-form" onSubmit={submit}><div className="editor-main">
       <section className="editor-card"><div className="editor-section-title"><span>01</span><div><h2>Основная информация</h2><p>Начнём со знакомства с блюдом.</p></div></div>
@@ -60,7 +69,7 @@ export default function EditorPage() {
       <section className="editor-card"><div className="editor-section-title"><span>03</span><div><h2>Способ приготовления</h2><p>Разбей процесс на понятные шаги.</p></div></div>
         <div className="dynamic-fields">{form.steps.map((value, i) => <div className="dynamic-row step-field" key={i}><span>{i + 1}.</span><textarea aria-label={`Шаг ${i + 1}`} rows="2" value={value} onChange={(e) => listChange('steps', i, e.target.value)} placeholder="Что нужно сделать на этом шаге?"/><button type="button" className="remove-row" onClick={() => listRemove('steps', i)} aria-label="Удалить шаг"><Minus size={18}/></button></div>)}</div><button className="add-row" type="button" onClick={() => listAdd('steps')}><Plus size={17}/> Добавить шаг</button>
       </section>
-    </div><aside className="editor-aside"><section className="editor-card"><div className="editor-section-title"><span>04</span><div><h2>Оформление</h2><p>Сделаем блюдо узнаваемым.</p></div></div><div className="field"><label htmlFor="image">Ссылка на фотографию</label><div className="input-with-icon"><ImagePlus size={19}/><input id="image" type="url" value={form.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://..." /></div><small>Для прототипа используем ссылку на изображение вместо загрузки файла.</small></div><div className="field"><label htmlFor="emoji">Эмодзи блюда</label><input id="emoji" value={form.emoji} onChange={(e) => set('emoji', e.target.value)} placeholder="🍝" maxLength="8" /></div><div className="emoji-preview">{form.emoji || '🍽️'}</div><div className="field"><label htmlFor="tags">Теги через запятую</label><input id="tags" value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder="Быстро, Домашнее, Без мяса" /></div></section>
+    </div><aside className="editor-aside"><section className="editor-card"><div className="editor-section-title"><span>04</span><div><h2>Оформление</h2><p>Сделаем блюдо узнаваемым.</p></div></div><div className="field"><label htmlFor="image">Ссылка на фотографию</label><div className="input-with-icon"><ImagePlus size={19}/><input id="image" type="text" readOnly={form.imageUrl.startsWith('/api/media/')} value={form.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="https://..." /></div><small>Для прототипа используем ссылку на изображение вместо загрузки файла.</small></div><div className="field"><label htmlFor="emoji">Эмодзи блюда</label><input id="emoji" value={form.emoji} onChange={(e) => set('emoji', e.target.value)} placeholder="🍝" maxLength="8" /></div><div className="emoji-preview">{form.emoji || '🍽️'}</div><div className="field"><label htmlFor="tags">Теги через запятую</label><input id="tags" value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder="Быстро, Домашнее, Без мяса" /></div></section>
       <div className="editor-submit"><div className="review-note"><span>✳</span><p><strong>Рецепт попадёт на проверку</strong><br/>Модератор опубликует его в общем каталоге после одобрения.</p></div><button className="btn btn-primary btn-block" disabled={saving} type="submit"><Save size={18}/>{saving ? 'Сохраняем…' : edit ? 'Сохранить изменения' : 'Отправить рецепт'}<ArrowRight size={18}/></button><Link to="/profile" className="cancel-link">Отмена</Link></div>
     </aside></form>
   </div>;

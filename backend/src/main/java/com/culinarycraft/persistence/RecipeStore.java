@@ -15,11 +15,13 @@ public class RecipeStore {
     private final ReviewRepository reviews;
     private final FavoriteRepository favorites;
     private final DemoUserRepository users;
+    private final com.culinarycraft.media.MediaService media;
 
     public RecipeStore(RecipeRepository recipes, ReviewRepository reviews,
-                       FavoriteRepository favorites, DemoUserRepository users) {
+                       FavoriteRepository favorites, DemoUserRepository users, com.culinarycraft.media.MediaService media) {
         this.recipes = recipes; this.reviews = reviews;
         this.favorites = favorites; this.users = users;
+        this.media = media;
     }
 
     public List<Recipe> all() { return recipes.findAll().stream().map(RecipeEntity::toModel).toList(); }
@@ -37,7 +39,7 @@ public class RecipeStore {
         return recipes.save(entity).toModel();
     }
 
-    public void delete(long id) { recipes.deleteById(id); }
+    public void delete(long id) { media.deleteForRecipe(id); recipes.deleteById(id); }
     public List<Review> reviews(long id) {
         return reviews.findByRecipeIdOrderByCreatedAtDescIdDesc(id).stream().map(ReviewEntity::toModel).toList();
     }

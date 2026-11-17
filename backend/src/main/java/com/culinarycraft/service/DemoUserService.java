@@ -18,7 +18,8 @@ public class DemoUserService {
     public DemoUserService(DemoUserRepository users) { this.users = users; }
 
     public List<DemoUser> all() {
-        return users.findAll(Sort.by("id")).stream().map(DemoUserEntity::toModel).toList();
+        return users.findAll(Sort.by("id")).stream().filter(user -> "LEGACY".equals(user.getStatus()))
+            .map(DemoUserEntity::toModel).toList();
     }
 
     public DemoUser requireUser(Long id) {
