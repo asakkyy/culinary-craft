@@ -90,7 +90,7 @@ it.each([['RESOLVED', 'Закрыть без изменения рецепта']
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Рассмотреть' }));
   await user.selectOptions(screen.getByLabelText('Решение'), screen.getByRole('option', { name: label }));
-  await user.type(screen.getByLabelText('Комментарий к жалобе 7'), 'Проверено модератором');
+  await user.type(screen.getByLabelText('Комментарий к жалобе', { exact: true }), 'Проверено модератором');
   await user.click(screen.getByRole('button', { name: 'Сохранить решение' }));
   expect(api.reportDecision).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Подтвердить решение' }));
@@ -102,7 +102,7 @@ it('подтверждает снятие вместе с закрытием и 
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Рассмотреть' }));
   await user.selectOptions(screen.getByLabelText('Решение'), screen.getByRole('option', { name: 'Снять рецепт с публикации' }));
-  await user.type(screen.getByLabelText('Комментарий к жалобе 7'), 'Нарушение подтверждено');
+  await user.type(screen.getByLabelText('Комментарий к жалобе', { exact: true }), 'Нарушение подтверждено');
   await user.click(screen.getByRole('button', { name: 'Сохранить решение' }));
   expect(screen.getByText(/исчезнет из публичного каталога/)).toBeVisible();
   expect(api.reportDecision).not.toHaveBeenCalled();
@@ -111,14 +111,16 @@ it('подтверждает снятие вместе с закрытием и 
     status: 'RESOLVED', comment: 'Нарушение подтверждено', unpublishRecipe: true,
   });
   expect(await screen.findByRole('alert')).toHaveTextContent('Рецепт уже не опубликован');
-  expect(screen.getByLabelText('Комментарий к жалобе 7')).toHaveValue('Нарушение подтверждено');
+  expect(screen.getByLabelText('Комментарий к жалобе', { exact: true })).toHaveValue('Нарушение подтверждено');
 });
 it('требует причину и подтверждение перед блокировкой', async () => {
   renderPage(<AdminPage />);
   const user = userEvent.setup();
   await user.click(screen.getByRole('link', { name: 'Пользователи' }));
   await user.click(await screen.findByRole('button', { name: 'Заблокировать' }));
-  await user.type(screen.getByLabelText('Причина блокировки 10'), 'Нарушение правил');
+  const reason = screen.getByRole('textbox', { name: 'Причина блокировки', exact: true });
+  expect(reason).toBeRequired();
+  await user.type(reason, 'Нарушение правил');
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Заблокировать' }));
   expect(api.blockUser).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Подтвердить решение' }));
