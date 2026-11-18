@@ -1,6 +1,7 @@
 package com.culinarycraft.admin;
 
 import com.culinarycraft.persistence.*;
+import com.culinarycraft.service.RecipeService;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.constraints.*;
 import java.time.Instant;
@@ -16,18 +17,23 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class AdministrationService {
     public record ReportInput(@NotNull RecipeReport.Reason reason, @Size(max = 1000) String description) {}
-    public record Decision(@NotNull RecipeReport.Status status, @NotBlank @Size(min = 3, max = 1000) String comment) {}
+    public record Decision(@NotNull RecipeReport.Status status, @NotBlank @Size(min = 3, max = 1000) String comment,
+                           boolean unpublishRecipe) {
+        public Decision(RecipeReport.Status status, String comment) { this(status, comment, false); }
+    }
     public record Block(@NotBlank @Size(min = 3, max = 500) String reason) {}
     public record UserView(long id, String name, String email, String role, String status, Instant registeredAt, String blockReason, Instant blockedAt, String avatarUrl) {}
     private final DemoUserRepository users;
     private final RecipeRepository recipes;
+    private final RecipeService recipeService;
     private final ReportRepository reports;
     private final AuditRepository audit;
     private final AuditService events;
     private final EntityManager entities;
-    public AdministrationService(DemoUserRepository users, RecipeRepository recipes, ReportRepository reports,
+    public AdministrationService(DemoUserRepository users, RecipeRepository recipes, RecipeService recipeService, ReportRepository reports,
                                  AuditRepository audit, AuditService events, EntityManager entities) {
-        this.users = users; this.recipes = recipes; this.reports = reports; this.audit = audit; this.events = events; this.entities = entities;
+        this.users = users; this.recipes = recipes; this.recipeService = recipeService; this.reports = reports;
+        this.audit = audit; this.events = events; this.entities = entities;
     }
     private DemoUserEntity active(long id) {
         var user = users.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
@@ -87,14 +93,19 @@ public class AdministrationService {
     }
     public RecipeReport.View decide(long actor, long id, Decision input) {
         admin(actor);
-        if (input.comment().strip().length() < 3) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Добавьте комментарий");
+        String comment = input.comment().strip();
+        if (comment.length() < 3) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Добавьте комментарий");
+        if (input.unpublishRecipe() && input.status() != RecipeReport.Status.RESOLVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Снятие с публикации требует закрытия жалобы");
+        }
         var report = reports.lock(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         if (report.getStatus() == RecipeReport.Status.RESOLVED || report.getStatus() == RecipeReport.Status.REJECTED
             || input.status() == RecipeReport.Status.OPEN || report.getStatus() == input.status()
             || (report.getModeratorId() != null && report.getModeratorId() != actor)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Жалоба уже рассмотрена или занята другим администратором");
         }
-        report.decide(input.status(), actor, input.comment().strip());
+        if (input.unpublishRecipe()) recipeService.unpublish(report.getRecipeId(), actor, comment);
+        report.decide(input.status(), actor, comment);
         events.record(actor, AuditEvent.Action.valueOf("REPORT_" + input.status()), "REPORT", id, "Status: " + input.status());
         return view(report, true);
     }

@@ -25,6 +25,7 @@ public class RecipeReport {
         this.description = description; status = Status.OPEN; createdAt = Instant.now();
     }
     public long getId() { return id; }
+    public long getRecipeId() { return recipeId; }
     public long getReporterId() { return reporterId; }
     public Status getStatus() { return status; }
     public Long getModeratorId() { return moderatorId; }
