@@ -1,10 +1,14 @@
 import ImageUpload from '../components/ImageUpload';
 import FormError from '../components/FormError';
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import ConfirmDialog from '../components/ConfirmDialog';
+import Modal from '../components/Modal';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, ImagePlus, Minus, Plus, Save, ClipboardList } from 'lucide-react';
 import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
+import { applyDraft, draftChanges, draftKey, hasDraftConflict, readDraft } from './recipeDraft';
+import useRecipeDraft from './useRecipeDraft';
 
 const categories = ['Завтраки', 'Основные блюда', 'Десерты', 'Салаты', 'Супы', 'Напитки'];
 const init = {
@@ -13,37 +17,99 @@ const init = {
   category: 'Завтраки',
   emoji: '🍽️',
   imageUrl: '',
-  prepMinutes: 30,
-  servings: 2,
+  prepMinutes: '30',
+  servings: '2',
   difficulty: 'Легко',
   ingredients: ['', ''],
   steps: ['', ''],
   tags: '',
 };
 
+const formatTime = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
+
+function recipeForm(recipe) {
+  return {
+    ...Object.fromEntries(Object.keys(init).map((name) => [name, recipe[name]])),
+    prepMinutes: String(recipe.prepMinutes),
+    servings: String(recipe.servings),
+    imageUrl: recipe.imageUrl || '',
+    tags: recipe.tags.join(', '),
+  };
+}
+
 export default function EditorPage() {
   const { id } = useParams();
+  const { user, setPickerOpen } = useApp();
+  if (!user)
+    return (
+      <div className="container narrow-page">
+        <div className="empty-state">
+          <h2>Войдите, чтобы создать рецепт</h2>
+          <p>Сохраняйте рецепты в своём аккаунте и отправляйте их на публикацию.</p>
+          <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>
+            Войти
+          </button>
+        </div>
+      </div>
+    );
+  const key = draftKey(user.id, id);
+  return <RecipeEditor key={key} storageKey={key} id={id} userId={user.id} />;
+}
+
+function RecipeEditor({ storageKey, id, userId }) {
   const edit = Boolean(id);
-  const { user, setPickerOpen, notify, changed } = useApp();
+  const { notify, changed } = useApp();
+  const [initial] = useState(() => readDraft(storageKey));
+  const [recovery, setRecovery] = useState(initial.raw !== null);
+  const [recoveryOpen, setRecoveryOpen] = useState(recovery);
+  const [base, setBase] = useState(init);
   const [photo, setPhoto] = useState(null);
   const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoHint, setPhotoHint] = useState(null);
+  const [linkHint, setLinkHint] = useState(false);
+  const [photoKey, setPhotoKey] = useState(0);
   const [createdId, setCreatedId] = useState(null);
   const [form, setForm] = useState(init);
-  const [loading, setLoading] = useState(edit);
+  const sourceId = id || initial.draft?.createdId;
+  const [loading, setLoading] = useState(Boolean(sourceId));
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [leaveError, setLeaveError] = useState(false);
+  const leaving = useRef(false);
+  const mounted = useRef(false);
   const navigate = useNavigate();
+  const photoChange = photo ? 'select' : removePhoto ? 'remove' : photoHint;
+  const snapshot = useMemo(
+    () => (loading || loadFailed || recovery ? null : draftChanges(base, form, photoChange, createdId, linkHint)),
+    [base, form, photoChange, createdId, linkHint, loading, loadFailed, recovery],
+  );
+  const dirty = snapshot !== null;
+  const { status, flush, clear } = useRecipeDraft(storageKey, initial, snapshot);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+  );
+
   useEffect(() => {
-    if (!edit || !user?.id) return;
-    setLoading(true);
-    setLoadFailed(false);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sourceId) return;
     let active = true;
     api
-      .one(id)
+      .one(sourceId)
       .then((r) => {
-        if (active) setForm({ ...r, tags: r.tags.join(', ') });
+        if (!active) return;
+        if (!id && r.ownerId !== userId) throw new Error('Сохранённый рецепт недоступен');
+        const loaded = recipeForm(r);
+        setBase(loaded);
+        setForm(loaded);
       })
       .catch((err) => {
         if (active) {
@@ -57,18 +123,22 @@ export default function EditorPage() {
     return () => {
       active = false;
     };
-  }, [id, edit, user?.id]);
+  }, [id, loadAttempt, sourceId, userId]);
+
   useEffect(() => {
-    if (!dirty || saving) return;
+    if (!dirty) return;
     const warn = (event) => {
+      if (leaving.current) return;
+      flush(false);
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, saving]);
+  }, [dirty, flush]);
+
   const set = (name, value) => {
-    setDirty(true);
+    if (name === 'imageUrl') setLinkHint(false);
     setForm((old) => ({ ...old, [name]: value }));
   };
   const listChange = (name, index, val) =>
@@ -78,12 +148,40 @@ export default function EditorPage() {
     );
   const listAdd = (name) => set(name, [...form[name], '']);
   const listRemove = (name, index) => set(name, form[name].length > 1 ? form[name].filter((_, i) => i !== index) : ['']);
+
+  function restore() {
+    const draft = initial.draft;
+    const restored = applyDraft(draft, base);
+    const needsLink = draft.needsImageUrl || (Boolean(draft.fields.imageUrl) && base.imageUrl.startsWith('/api/media/'));
+    const retryId = edit ? null : draft.createdId;
+    if (!draftChanges(base, restored, draft.photo, retryId, needsLink)) clear();
+    setForm(restored);
+    setPhotoHint(draft.photo);
+    setLinkHint(needsLink);
+    setCreatedId(retryId);
+    setRecovery(false);
+  }
+
+  function discard() {
+    clear();
+    const fresh = edit ? base : init;
+    setBase(fresh);
+    setForm(fresh);
+    setPhoto(null);
+    setRemovePhoto(false);
+    setPhotoHint(null);
+    setLinkHint(false);
+    setCreatedId(null);
+    setPhotoKey((value) => value + 1);
+    setError('');
+    if (!edit) setLoadFailed(false);
+    setRecovery(false);
+    setDiscardOpen(false);
+  }
+
   async function submit(event) {
     event.preventDefault();
-    if (!user) {
-      setPickerOpen(true);
-      return;
-    }
+    if (recovery || saving) return;
     const ingredients = form.ingredients.map((s) => s.trim()).filter(Boolean);
     const steps = form.steps.map((s) => s.trim()).filter(Boolean);
     if (!ingredients.length || !steps.length) {
@@ -102,34 +200,30 @@ export default function EditorPage() {
       servings: Number(form.servings),
     };
     setError('');
+    flush();
     setSaving(true);
     try {
       const saved = edit ? await api.update(id, body) : createdId ? await api.update(createdId, body) : await api.create(body);
-      setCreatedId(saved.id);
+      if (!edit && !createdId && (photo || removePhoto)) {
+        flush(mounted.current, { ...snapshot, createdId: saved.id });
+        if (mounted.current) setCreatedId(saved.id);
+      }
+      if (!mounted.current && (photo || removePhoto)) return;
       if (removePhoto) await api.deletePhoto(saved.id);
       if (photo) await api.photo(saved.id, photo);
+      leaving.current = true;
+      clear(mounted.current);
+      if (!mounted.current) return;
       changed();
-      setDirty(false);
       notify('Рецепт отправлен на модерацию');
+      if (blocker.state === 'blocked') blocker.reset();
       navigate(`/recipes/${saved.id}`);
     } catch (err) {
-      setError(errorText(err));
+      if (mounted.current) setError(errorText(err));
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   }
-  if (!user)
-    return (
-      <div className="container narrow-page">
-        <div className="empty-state">
-          <h2>Войдите, чтобы создать рецепт</h2>
-          <p>Сохраняйте рецепты в своём аккаунте и отправляйте их на публикацию.</p>
-          <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>
-            Войти
-          </button>
-        </div>
-      </div>
-    );
   if (loading)
     return (
       <div className="container narrow-page">
@@ -143,9 +237,31 @@ export default function EditorPage() {
         <div className="error-box" role="alert">
           {error}
         </div>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={() => {
+            setLoading(true);
+            setLoadFailed(false);
+            setError('');
+            setLoadAttempt((attempt) => attempt + 1);
+          }}
+        >
+          Повторить загрузку
+        </button>
+        {recovery && !edit && (
+          <button type="button" className="btn btn-outline" onClick={() => setDiscardOpen(true)}>
+            Удалить черновик
+          </button>
+        )}
         <Link className="btn btn-primary" to="/profile">
           Вернуться к своим рецептам
         </Link>
+        {discardOpen && (
+          <ConfirmDialog title="Удалить черновик?" label="Удалить черновик" onClose={() => setDiscardOpen(false)} onConfirm={discard}>
+            <p>Браузер удалит локальный черновик. Рецепт в профиле сохранится, если он уже был создан.</p>
+          </ConfirmDialog>
+        )}
       </section>
     );
   return (
@@ -162,26 +278,55 @@ export default function EditorPage() {
           <p>Заполни ингредиенты и шаги, чтобы каждый смог повторить твоё блюдо.</p>
         </div>
       </div>
+      <div className="editor-draft">
+        <p role="status">
+          {status === 'saving' && 'Сохранение черновика…'}
+          {status === 'saved' && 'Черновик сохранён'}
+          {status === 'error' && 'Не удалось сохранить черновик. Проверьте доступ к хранилищу и другие открытые вкладки редактора.'}
+        </p>
+        {recovery && !recoveryOpen && (
+          <button type="button" className="btn btn-outline" onClick={() => setRecoveryOpen(true)}>
+            {initial.draft ? 'Найден черновик' : 'Черновик недоступен'}
+          </button>
+        )}
+        {dirty && (
+          <button type="button" className="btn btn-outline" onClick={() => setDiscardOpen(true)} disabled={saving}>
+            Удалить черновик
+          </button>
+        )}
+      </div>
       <section className="editor-card">
         <ImageUpload
+          key={photoKey}
           label="Фотография рецепта"
-          url={removePhoto ? '' : form.imageUrl}
-          busy={saving}
+          url={form.imageUrl}
+          hideCurrent={removePhoto}
+          busy={saving || recovery}
           onFile={(file) => {
-            setDirty(true);
             setPhoto(file);
             setRemovePhoto(false);
+            setPhotoHint(null);
           }}
           onDelete={() => {
-            setDirty(true);
+            if (!photo) setRemovePhoto(Boolean(form.imageUrl));
             setPhoto(null);
-            setRemovePhoto(true);
+            setPhotoHint(null);
           }}
         />
+        {photoHint && (
+          <p className="info-note">
+            {photoHint === 'select'
+              ? 'После восстановления черновика выберите файл фотографии заново.'
+              : 'Фотография рецепта сохранена. Если нужно убрать её, нажмите «Удалить изображение» ещё раз.'}
+          </p>
+        )}
+        {(snapshot?.needsImageUrl || linkHint) && (
+          <p className="info-note">Ссылка с параметрами или временный адрес не сохраняются в черновике. При необходимости укажите ссылку заново.</p>
+        )}
       </section>
       {error && <FormError>{error}</FormError>}
       <form className="editor-form" onSubmit={submit}>
-        <div className="editor-main">
+        <fieldset className="editor-main" disabled={saving || recovery}>
           <section className="editor-card">
             <div className="editor-section-title">
               <span>01</span>
@@ -325,8 +470,8 @@ export default function EditorPage() {
               <Plus size={17} aria-hidden="true" /> Добавить шаг
             </button>
           </section>
-        </div>
-        <aside className="editor-aside">
+        </fieldset>
+        <fieldset className="editor-aside" disabled={saving || recovery}>
           <section className="editor-card">
             <div className="editor-section-title">
               <span>04</span>
@@ -343,7 +488,7 @@ export default function EditorPage() {
                   id="image"
                   name="image"
                   type="text"
-                  readOnly={form.imageUrl.startsWith('/api/media/')}
+                  readOnly={Boolean(photo) || form.imageUrl.startsWith('/api/media/')}
                   value={form.imageUrl}
                   onChange={(e) => set('imageUrl', e.target.value)}
                   placeholder="https://..."
@@ -379,8 +524,67 @@ export default function EditorPage() {
               Отмена
             </Link>
           </div>
-        </aside>
+        </fieldset>
       </form>
+      {recovery && recoveryOpen && (
+        <Modal title={initial.draft ? 'Найден черновик' : 'Черновик недоступен'} onClose={() => setRecoveryOpen(false)}>
+          {initial.draft ? (
+            <>
+              <p>
+                Последнее автосохранение{' '}
+                <time dateTime={new Date(initial.draft.savedAt).toISOString()}>{formatTime.format(initial.draft.savedAt)}</time>.
+              </p>
+              {hasDraftConflict(initial.draft, base) && (
+                <p className="info-note">
+                  Рецепт на сервере изменился. При восстановлении локальные изменения появятся в форме. Проверьте их перед отправкой.
+                </p>
+              )}
+              {initial.draft.createdId && (
+                <p>Рецепт №{initial.draft.createdId} уже создан. Восстановление продолжит работу с ним.</p>
+              )}
+              <p>Действие «Начать заново» удалит локальный черновик.</p>
+            </>
+          ) : (
+            <p>Черновик повреждён или несовместим с этой версией приложения.</p>
+          )}
+          <div className="dialog-actions">
+            <button type="button" className="btn btn-outline" onClick={discard}>
+              Начать заново
+            </button>
+            {initial.draft && (
+              <button type="button" className="btn btn-primary" onClick={restore}>
+                Восстановить черновик
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
+      {discardOpen && blocker.state !== 'blocked' && (
+        <ConfirmDialog title="Удалить черновик?" label="Удалить черновик" onClose={() => setDiscardOpen(false)} onConfirm={discard}>
+          <p>Браузер удалит локальные изменения. На сервере сохранятся текущие данные рецепта.</p>
+        </ConfirmDialog>
+      )}
+      {blocker.state === 'blocked' && (
+        <ConfirmDialog
+          title="Выйти из редактора?"
+          label={leaveError ? 'Уйти без локального сохранения' : 'Сохранить черновик и выйти'}
+          danger={leaveError}
+          busy={saving}
+          onClose={() => {
+            setLeaveError(false);
+            blocker.reset();
+          }}
+          onConfirm={() => {
+            if (leaveError || flush()) {
+              leaving.current = true;
+              blocker.proceed();
+            } else setLeaveError(true);
+          }}
+          error={leaveError ? 'Не удалось сохранить черновик. Останьтесь в редакторе, чтобы сохранить введённые изменения.' : null}
+        >
+          <p>Вы сможете восстановить введённые поля позже в этом браузере. Новый файл фотографии потребуется выбрать заново.</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

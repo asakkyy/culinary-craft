@@ -16,7 +16,8 @@ export default function RecoveryPage({ mode }) {
   const app = useApp();
   const navigate = useNavigate();
   const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token') || '');
-  const [email, setEmail] = useState(app?.user?.email || '');
+  const [editedEmail, setEditedEmail] = useState(null);
+  const email = editedEmail ?? app?.user?.email ?? '';
   const [password, setPassword] = useState('');
   const [now, setNow] = useState(Date.now());
   const [deadline, setDeadline] = useState(0);
@@ -26,11 +27,9 @@ export default function RecoveryPage({ mode }) {
   const [message, setMessage] = useState('');
   const [verified, setVerified] = useState(false);
   useEffect(() => {
-    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+    // Keep the router's history index so browser Back can be blocked in the editor.
+    if (window.location.hash) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
   }, []);
-  useEffect(() => {
-    if (app?.user?.email) setEmail(app.user.email);
-  }, [app?.user?.email]);
   useEffect(() => {
     setDeadline(storedDeadline(cooldownKey));
     setNow(Date.now());
@@ -101,7 +100,7 @@ export default function RecoveryPage({ mode }) {
     }
   }
   const linkAction = mode === 'verify' || mode === 'reset';
-  if ((mode === 'resend' || mode === 'verify') && app?.authLoading)
+  if (mode !== 'reset' && app?.authLoading)
     return (
       <p className="loading-message" role="status">
         Проверяем аккаунт…
@@ -146,7 +145,7 @@ export default function RecoveryPage({ mode }) {
                   required
                   maxLength={254}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEditedEmail(e.target.value)}
                 />
               </div>
             )}

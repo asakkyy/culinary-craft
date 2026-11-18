@@ -1,11 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import { Upload } from 'lucide-react';
 
-export default function ImageUpload({ label, url, onFile, onDelete, busy = false }) {
+export default function ImageUpload({ label, url, onFile, onDelete, busy = false, hideCurrent = false }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const working = busy || pending;
+  const displayed = preview || (hideCurrent ? '' : url);
   const id = useId();
   const [filename, setFilename] = useState('');
   useEffect(() => {
@@ -59,10 +60,8 @@ export default function ImageUpload({ label, url, onFile, onDelete, busy = false
         </label>
         <small>{filename || 'Файл не выбран'}</small>
       </div>
-      {(preview || url) && (
-        <img src={preview || url} alt={`Превью: ${label}`} style={{ maxWidth: '100%', maxHeight: 220, objectFit: 'cover' }} />
-      )}
-      {(preview || url) && onDelete && (
+      {displayed && <img src={displayed} alt={`Превью: ${label}`} style={{ maxWidth: '100%', maxHeight: 220, objectFit: 'cover' }} />}
+      {displayed && onDelete && (
         <button
           className="btn btn-outline"
           type="button"
