@@ -521,7 +521,7 @@ export default function AdminPage() {
                   {(tab === 'reports' || selected.status === 'ACTIVE') && (
                     <div className="field">
                       <label htmlFor="action-comment">
-                        {tab === 'reports' ? `Комментарий к жалобе ${selected.id}` : `Причина блокировки ${selected.id}`}
+                        {tab === 'reports' ? 'Комментарий к жалобе' : 'Причина блокировки'}
                       </label>
                       <textarea
                         id="action-comment"
