@@ -3,18 +3,28 @@ package com.culinarycraft.admin;
 import com.culinarycraft.PostgresIntegrationTest;
 import com.culinarycraft.auth.*;
 import com.culinarycraft.persistence.*;
+import com.culinarycraft.model.RecipeRequest;
+import com.culinarycraft.service.RecipeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
+import static org.mockito.Mockito.doThrow;
 
 class AdministrationApiTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
@@ -23,6 +33,8 @@ class AdministrationApiTest extends PostgresIntegrationTest {
     @Autowired PasswordEncoder passwords;
     @Autowired TokenService tokens;
     @Autowired AdministrationService service;
+    @Autowired RecipeService recipes;
+    @MockitoSpyBean AuditService events;
     @Autowired AuditRepository audit;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final String password = "Test admin password 123";
@@ -32,6 +44,85 @@ class AdministrationApiTest extends PostgresIntegrationTest {
     }
     private Cookie cookie(DemoUserEntity user) { return new Cookie("cc-session", tokens.issue(user)); }
     private String report() throws Exception { return json.writeValueAsString(Map.of("reason", "SPAM", "description", "Подробная причина жалобы на рецепт")); }
+    @Test void resolvingReportCanUnpublishRecipeInTheSameDecision() throws Exception {
+        var reporter = create("unpublish-reporter@example.test", "USER");
+        var admin = create("unpublish-reviewer@example.test", "ADMIN");
+        long id = service.report(reporter.getId(), 1, new AdministrationService.ReportInput(RecipeReport.Reason.SPAM, "")).id();
+        String path = "/api/admin/reports/" + id + "/decision";
+        String body = "{\"status\":\"RESOLVED\",\"comment\":\"Нарушение подтверждено\",\"unpublishRecipe\":true}";
+        long before = audit.count();
+        mvc.perform(post(path).cookie(cookie(reporter)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isForbidden());
+        mvc.perform(post(path).cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("RESOLVED"))
+            .andExpect(jsonPath("$.moderatorComment").value("Нарушение подтверждено"));
+        mvc.perform(get("/api/recipes/1")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/recipes/1").cookie(cookie(admin))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PENDING"));
+        mvc.perform(post(path).cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isConflict());
+        assertEquals(before + 2, audit.count());
+        mvc.perform(get("/api/admin/audit").cookie(cookie(admin)).param("action", "RECIPE_UNPUBLISHED"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
+    }
+    @ParameterizedTest
+    @EnumSource(value = RecipeReport.Status.class, names = {"RESOLVED", "REJECTED"})
+    void otherDecisionsLeavePublicationUntouched(RecipeReport.Status decision) throws Exception {
+        var reporter = create("keep-reporter@example.test", "USER");
+        var admin = create("keep-reviewer@example.test", "ADMIN");
+        long id = service.report(reporter.getId(), 1, new AdministrationService.ReportInput(RecipeReport.Reason.SPAM, "")).id();
+        long before = audit.count();
+        String path = "/api/admin/reports/" + id + "/decision";
+        mvc.perform(post(path).cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("status", decision, "comment", "Рецепт оставлен без изменений"))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(decision.name()))
+            .andExpect(jsonPath("$.moderatorComment").value("Рецепт оставлен без изменений"));
+        mvc.perform(get("/api/recipes/1")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
+        assertEquals(before + 1, audit.count());
+    }
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void unavailableRecipeLeavesReportOpen(boolean deleted) throws Exception {
+        var reporter = create("unavailable-reporter@example.test", "USER");
+        var admin = create("unavailable-reviewer@example.test", "ADMIN");
+        long id = service.report(reporter.getId(), 1, new AdministrationService.ReportInput(RecipeReport.Reason.SPAM, "")).id();
+        if (deleted) recipes.delete(1, admin.getId());
+        else recipes.unpublish(1, admin.getId(), "Уже снят с публикации");
+        long before = audit.count();
+        mvc.perform(post("/api/admin/reports/" + id + "/decision").cookie(cookie(admin)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\":\"RESOLVED\",\"comment\":\"Нарушение подтверждено\",\"unpublishRecipe\":true}"))
+            .andExpect(status().is(deleted ? 404 : 409));
+        assertEquals(RecipeReport.Status.OPEN, service.mineOne(reporter.getId(), id).status());
+        assertEquals(before, audit.count());
+    }
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void auditFailureRollsBackBothChangesAndRecipeAudit() {
+        var reporter = create("rollback-reporter@example.test", "USER");
+        var admin = create("rollback-reviewer@example.test", "ADMIN");
+        var request = new RecipeRequest("Рецепт для отката", "Описание рецепта для проверки отката", "Супы", "", "",
+            30, 2, "Легко", List.of("Вода"), List.of("Нагреть воду"), List.of());
+        long recipe = recipes.create(request, admin.getId()).id();
+        try {
+            recipes.moderate(recipe, "APPROVED", admin.getId());
+            long report = service.report(reporter.getId(), recipe, new AdministrationService.ReportInput(RecipeReport.Reason.SPAM, "")).id();
+            long before = audit.count();
+            doThrow(new IllegalStateException("Audit write failed")).when(events)
+                .record(admin.getId(), AuditEvent.Action.REPORT_RESOLVED, "REPORT", report, "Status: RESOLVED");
+            var decision = new AdministrationService.Decision(RecipeReport.Status.RESOLVED, "Причина снятия", true);
+            assertThrows(IllegalStateException.class, () -> service.decide(admin.getId(), report, decision));
+            assertEquals("APPROVED", recipes.get(recipe, null).status());
+            var unchanged = service.mineOne(reporter.getId(), report);
+            assertEquals(RecipeReport.Status.OPEN, unchanged.status());
+            assertNull(unchanged.moderatorId());
+            assertEquals(before, audit.count());
+        } finally {
+            jdbc.update("delete from recipe_reports where recipe_id = ?", recipe);
+            jdbc.update("delete from administrative_audit where admin_id = ?", admin.getId());
+            recipes.delete(recipe, admin.getId());
+            users.deleteAll(List.of(reporter, admin));
+        }
+    }
     @Test void reportsArePrivateAndDecisionsAreAudited() throws Exception {
         long before = audit.count();
         var owner = create("reporter@example.test", "USER"); var other = create("other@example.test", "USER");

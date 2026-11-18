@@ -94,8 +94,11 @@ test('V01 — email: явная отправка, другая вкладка, �
   await page.getByRole('button', { name: 'Выйти', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await login(page, email);
+  await expect(page).toHaveURL(/:5173\/$/);
+  await expect(page.getByRole('link', { name: 'Подтвердить email', exact: true })).toHaveCount(0);
   expect(await inbox(page.request, email)).toHaveLength(0);
-  await page.goto('/resend-verification');
+  await page.goto('/profile');
+  await page.getByRole('link', { name: 'Отправить письмо для подтверждения' }).click();
   await page.getByRole('button', { name: 'Отправить письмо', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Отправить письмо', exact: true })).toBeDisabled();
   const link = await verificationLink(page.request, email);

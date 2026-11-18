@@ -21,6 +21,15 @@ it('показывает имя владельца и его рецепты', as
   expect(await screen.findByText('На модерации')).toBeInTheDocument();
 });
 
+it.each([false, true])('показывает ссылку подтверждения только при неподтверждённом email (%s)', async (emailVerified) => {
+  useApp.mockReturnValue({ user: { ...anna, emailVerified }, dataVersion: 0 });
+  renderPage(<ProfilePage />);
+  await screen.findByText('На модерации');
+  const link = screen.queryByRole('link', { name: 'Отправить письмо для подтверждения' });
+  if (emailVerified) expect(link).not.toBeInTheDocument();
+  else expect(link).toHaveAttribute('href', '/resend-verification');
+});
+
 it('открывает сохранённые рецепты в избранном', async () => {
   renderPage(<ProfilePage view="favorites" />);
   expect(await screen.findByRole('heading', { name: 'Любимые рецепты' })).toBeInTheDocument();

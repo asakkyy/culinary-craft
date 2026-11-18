@@ -83,16 +83,35 @@ it('сохраняет доступ к истории жалоб', async () => {
   renderPage(<ReportsPage />);
   expect(await screen.findByText(/Спам · Открыта/)).toBeInTheDocument();
 });
-it('сохраняет решение только после подтверждения и не смешивает его с рецептом', async () => {
+it.each([['RESOLVED', 'Закрыть без изменения рецепта'], ['REJECTED', 'Отклонить жалобу']])(
+  'сохраняет решение %s только после подтверждения', async (status, label) => {
+  api.reportDecision.mockClear();
   renderPage(<AdminPage />);
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Рассмотреть' }));
-  await user.selectOptions(screen.getByLabelText('Решение'), 'RESOLVED');
+  await user.selectOptions(screen.getByLabelText('Решение'), screen.getByRole('option', { name: label }));
   await user.type(screen.getByLabelText('Комментарий к жалобе 7'), 'Проверено модератором');
   await user.click(screen.getByRole('button', { name: 'Сохранить решение' }));
   expect(api.reportDecision).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Подтвердить решение' }));
-  expect(api.reportDecision).toHaveBeenCalledWith(7, { status: 'RESOLVED', comment: 'Проверено модератором' });
+  expect(api.reportDecision).toHaveBeenCalledWith(7, { status, comment: 'Проверено модератором' });
+});
+it('подтверждает снятие вместе с закрытием и сохраняет форму при ошибке', async () => {
+  api.reportDecision.mockClear().mockRejectedValueOnce(new Error('Рецепт уже не опубликован'));
+  renderPage(<AdminPage />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Рассмотреть' }));
+  await user.selectOptions(screen.getByLabelText('Решение'), screen.getByRole('option', { name: 'Снять рецепт с публикации' }));
+  await user.type(screen.getByLabelText('Комментарий к жалобе 7'), 'Нарушение подтверждено');
+  await user.click(screen.getByRole('button', { name: 'Сохранить решение' }));
+  expect(screen.getByText(/исчезнет из публичного каталога/)).toBeVisible();
+  expect(api.reportDecision).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Подтвердить решение' }));
+  expect(api.reportDecision).toHaveBeenCalledExactlyOnceWith(7, {
+    status: 'RESOLVED', comment: 'Нарушение подтверждено', unpublishRecipe: true,
+  });
+  expect(await screen.findByRole('alert')).toHaveTextContent('Рецепт уже не опубликован');
+  expect(screen.getByLabelText('Комментарий к жалобе 7')).toHaveValue('Нарушение подтверждено');
 });
 it('требует причину и подтверждение перед блокировкой', async () => {
   renderPage(<AdminPage />);
