@@ -4,15 +4,64 @@ import com.culinarycraft.model.DemoUser;
 import jakarta.persistence.*;
 
 @Entity
+@org.hibernate.annotations.BatchSize(size = 50)
 @Table(name = "demo_users")
 public class DemoUserEntity {
-    @Id private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(nullable = false) private String name;
     @Column(nullable = false) private String role;
     @Column(nullable = false) private String initials;
     @Column(nullable = false) private String subtitle;
 
     protected DemoUserEntity() {}
+
+    private String email;
+    private String passwordHash;
+    private String status;
+    private java.time.Instant registeredAt;
+    private java.time.Instant updatedAt;
+    private String avatarUrl;
+    private long tokenVersion;
+    @Column(length = 500) private String blockReason;
+    private java.time.Instant blockedAt;
+    private java.time.Instant emailVerifiedAt;
+    public boolean isEmailVerified() { return emailVerifiedAt != null; }
+    public void verifyEmail() { emailVerifiedAt = java.time.Instant.now(); updatedAt = emailVerifiedAt; }
+
+    public static DemoUserEntity account(String name, String email, String hash, String role) {
+        var account = new DemoUserEntity();
+        account.name = name; account.email = email; account.passwordHash = hash;
+        account.role = role; account.status = "ACTIVE";
+        account.initials = name.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
+        account.subtitle = ""; account.registeredAt = java.time.Instant.now();
+        account.updatedAt = account.registeredAt;
+        if ("ADMIN".equals(role)) account.verifyEmail();
+        return account;
+    }
+    public Long getId() { return id; }
+    public String getEmail() { return email; }
+    public String getPasswordHash() { return passwordHash; }
+    public String getStatus() { return status; }
+    public String getRole() { return role; }
+    public long getTokenVersion() { return tokenVersion; }
+    public void revokeTokens() { tokenVersion++; }
+    public java.time.Instant getRegisteredAt() { return registeredAt; }
+    public java.time.Instant getUpdatedAt() { return updatedAt; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void rename(String value) {
+        name = value; initials = value.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
+        updatedAt = java.time.Instant.now();
+    }
+    public void changeEmail(String value) { if (!value.equals(email)) emailVerifiedAt = null; email = value; updatedAt = java.time.Instant.now(); }
+    public void changePassword(String hash) { passwordHash = hash; revokeTokens(); updatedAt = java.time.Instant.now(); }
+    public void avatar(String url) { avatarUrl = url; updatedAt = java.time.Instant.now(); }
+    public String getBlockReason() { return blockReason; }
+    public java.time.Instant getBlockedAt() { return blockedAt; }
+    public void block(boolean blocked, String reason) {
+        status = blocked ? "BLOCKED" : "ACTIVE";
+        blockReason = blocked ? reason : null; blockedAt = blocked ? java.time.Instant.now() : null;
+        revokeTokens(); updatedAt = java.time.Instant.now();
+    }
 
     public DemoUser toModel() { return new DemoUser(id, name, role, initials, subtitle); }
 }

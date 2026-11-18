@@ -24,16 +24,19 @@ public class RecipeEntity {
     @Column(nullable = false) private Instant createdAt;
 
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_ingredients", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")
     private List<String> ingredients = new ArrayList<>();
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_steps", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")
     private List<String> steps = new ArrayList<>();
     @ElementCollection
+    @org.hibernate.annotations.BatchSize(size = 30)
     @CollectionTable(name = "recipe_tags", joinColumns = @JoinColumn(name = "recipe_id"))
     @OrderColumn(name = "position")
     @Column(name = "value", nullable = false, columnDefinition = "text")
@@ -42,6 +45,7 @@ public class RecipeEntity {
     protected RecipeEntity() {}
 
     public long getId() { return id; }
+    public void photo(String url) { imageUrl = url; status = "PENDING"; }
 
     public static RecipeEntity create(Recipe recipe, DemoUserEntity owner) {
         RecipeEntity entity = new RecipeEntity();
@@ -55,7 +59,7 @@ public class RecipeEntity {
         description = recipe.description();
         category = recipe.category();
         emoji = recipe.emoji();
-        imageUrl = recipe.imageUrl();
+        if (imageUrl == null || !imageUrl.startsWith("/api/media/")) imageUrl = recipe.imageUrl();
         prepMinutes = recipe.prepMinutes();
         servings = recipe.servings();
         difficulty = recipe.difficulty();

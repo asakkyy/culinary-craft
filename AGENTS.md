@@ -1,7 +1,67 @@
 # AGENTS.md — Culinary Craft
 
+## Quality hardening
+
+- V8: CatalogQuery выполняет фильтрацию/сортировку/пагинацию/агрегаты в PostgreSQL.
+- search_text обслуживается триггерами рецептов и тегов, GIN pg_trgm сохраняет поиск подстроки.
+- pg_trgm требует CREATE для миграционной роли либо предварительной установки администратором.
+- Каталог: REPEATABLE READ, ID для равных ключей, максимум 30; batch коллекций и join владельца.
+- Между HTTP-запросами offset может смещаться при записи; cursor API ещё не вводился.
+- Не возвращать store.all() в каталог; личные списки пока сохраняют старый контракт без пагинации.
+
+- MediaCleanupService: dry-run/ADMIN API, minimum age 24h, max 500 generated files per batch.
+- PostgreSQL advisory lock 61319488: upload/delete transactions shared, cleaner exclusive.
+- Never remove referenced files, follow symlinks, recursively traverse MEDIA_ROOT or accept user paths.
+- Scheduler opt-in MEDIA_CLEANUP_ENABLED; deletion separately opt-in MEDIA_CLEANUP_DRY_RUN=false.
+- Tests must use temporary MEDIA_ROOT and keep background cleanup disabled.
+
+- V7: хешированные одноразовые email-токены, SMTP через Spring Mail, локально Mailpit.
+- До email verification разрешены вход/настройки, запись контента запрещена SecurityFilterChain.
+- Не делать LEGACY активными. V7 доверяет только существующим не-legacy ADMIN, USER подтверждают адрес.
+- Recovery/verification — публичные CSRF-защищённые POST, одинаковый 202 для неизвестного адреса.
+- После reset отозвать версии сессий, очистить cookie браузера и React Context.
+- DTO с паролями/токенами имеют redacted toString; не возвращать стандартное логирование секретов.
+- Отправка после commit асинхронно; токены не логировать, не сохранять в outbox в открытом виде.
+- E2E требует отдельные PostgreSQL и Mailpit, внешняя почта в тестах запрещена.
+
+- Ветка feature/security-reliability-hardening: V6 authentication_limits.
+- Ограничители входа/регистрации хранятся в PostgreSQL в отдельных транзакциях:
+  ошибки входа не откатывают счётчики. Не доверять пользовательскому X-Forwarded-For.
+- Cookie CSRF и JWT: SameSite=Strict, Secure из COOKIE_SECURE; только локально false.
+- Ошибки JSON/типов возвращают безопасный текст; внутренние сообщения Spring скрыты.
+- При изменении тестов ограничения сбрасываются только в изолированной Testcontainers БД.
+
 > Постоянные инструкции для Codex и других coding-агентов, работающих с этим репозиторием.
 > Последняя сверка с рабочей веткой `feature/postgresql-persistence`: 17.11.2026.
+> Обновление ветки `feature/profiles-media-moderation`: этапы II–IV — профили, медиа, администрация.
+> Старые упоминания демо-входа ниже относятся к историческому интерфейсу:
+> X-Demo-User больше не доверяется. Актуальные правила этого этапа описаны ниже и в README.
+
+## Аккаунты: актуальные правила этапа I
+
+- Spring Security и Nimbus JWT; одна схема входа — HttpOnly cookie, CSRF обязателен.
+- JWT_SECRET обязателен, Base64 минимум 32 случайных байта; COOKIE_SECURE=true по умолчанию.
+- Новый V3 расширяет demo_users. Старые ID сохранены, LEGACY не имеют паролей.
+- /api/auth/register, login, me, logout, csrf; регистрация всегда USER, BCrypt cost 12.
+- Каждый JWT проверяется по статусу и token_version в БД; logout отзывает все сессии.
+- Первый ADMIN создаётся только через BOOTSTRAP_ADMIN/ADMIN_EMAIL/ADMIN_PASSWORD.
+- Клиент не хранит токен в localStorage; удалён выбор демо-ролей, добавлены формы и защита маршрутов.
+- Playwright требует E2E_DB_URL отдельной свежей БД, сам генерирует тестовые секреты.
+- Реализованы настройки `/settings`, аватары, фото рецептов, собственные жалобы `/reports`
+  и панель `/admin` (жалобы, пользователи, аудит; повторное использование модерации).
+- V4 создаёт media_files, V5 — жалобы/аудит и данные блокировки. V1–V3 не изменять.
+- ProfileService принимает только ID из JWT; смена email требует пароля, смена пароля отзывает JWT.
+- MediaService хранит метаданные в БД, ImageStorage — PNG на диске MEDIA_ROOT (по умолчанию backend/data/media).
+  Только PNG/JPEG до 5 МБ, 4096px/12MP, повторное кодирование. UUID вместо пользовательских имён.
+  При rollback новый файл удаляется; старый — после commit. Не удаляй пользовательские файлы в тестах.
+- Фото неопубликованного рецепта доступно только автору/ADMIN; изменение фото возвращает PENDING.
+- AdministrationService: типизированные жалобы, уникальные активные причины, максимум 5 в час,
+  приватность заявителя, блокировка строки для решений. Внутренние комментарии скрыты от заявителя.
+- Списки администрирования используют SQL-фильтрацию/пагинацию (максимум 50), DTO PageView.
+- Блокировка/разблокировка меняют token_version. Запрещены самоблокировка и потеря последнего ADMIN.
+- AuditService пишет административные события в той же транзакции; публичных изменений аудита нет.
+- Тесты используют Testcontainers и временный MEDIA_ROOT; E2E_DB_URL только отдельной свежей БД.
+- Поля status/avatar_url/updated_at/token_version — основа следующих этапов.
 > Если содержимое этого файла расходится с текущим кодом, конфигурацией или заданием пользователя, сначала проверь актуальные файлы и сообщи о расхождении. Не выдавай старое описание за текущее состояние.
 
 ## 1. Контекст и цель проекта
@@ -17,7 +77,7 @@ GitHub: https://github.com/asakkyy/culinary-craft
 - **ЛР №6 — прототип приложения:** React UI + Spring Boot REST API, каталог, подробная карточка рецепта, профиль, избранное, отзывы, создание/редактирование и модерация.
 - **ЛР №7 — автоматизированное тестирование:** JUnit 5, Spring Boot Test/MockMvc, Vitest, React Testing Library, Playwright, JaCoCo/V8 coverage, HTML/XML/JSON/CSV отчёты и CI quality gate.
 
-Реальный учебный прототип **не предназначен для production**: данные сохраняются в PostgreSQL, но защищённой авторизации пока нет. Не называй демо-авторизацию полноценной безопасностью.
+Учебное приложение использует Spring Security/JWT, PostgreSQL, email verification/recovery и ограничения входа. Production-развёртывание требует отдельной проверки TLS/proxy, SMTP, мониторинга, резервирования и зависимостей; не называй учебный сервер полностью production-ready.
 
 Главные цели будущих изменений:
 1. Продолжать развивать **существующий** проект, а не создавать ещё один «Culinary Craft» с нуля.
@@ -34,12 +94,12 @@ GitHub: https://github.com/asakkyy/culinary-craft
 | Backend | Java, Spring Boot **3.5.7**, Gradle (Groovy DSL), Spring Web, Validation, Spring Data JPA |
 | Java compatibility | `sourceCompatibility`/`targetCompatibility`: **Java 17**; GitHub CI использует **JDK 21** |
 | Backend test/quality | JUnit 5, Spring Boot Test, MockMvc, Testcontainers PostgreSQL, Checkstyle, JaCoCo |
-| Frontend | React **18**, React Router **6**, Vite **6**, JavaScript/JSX |
-| Frontend API/state | Axios, React Context (`AppContext`), `localStorage` для демо-пользователя |
-| Frontend test/quality | Vitest **3**, React Testing Library, Playwright + Chromium, ESLint, Prettier, V8 coverage |
+| Frontend | React **18**, React Router **7**, Vite **6**, JavaScript/JSX |
+| Frontend API/state | Axios, React Context (`AppContext`), HttpOnly JWT cookie + CSRF |
+| Frontend test/quality | Vitest **5**, React Testing Library, Playwright (Chromium в CI, локально также Firefox и WebKit), ESLint, Prettier, V8 coverage |
 | Automation | GitHub Actions, Husky, Commitlint, Python-скрипты метрик |
 | Storage | PostgreSQL **17**, Spring Data JPA, SQL-миграции Flyway; локально Docker Compose |
-| Auth | Только демонстрационный выбор пользователей; **не JWT, не Spring Security** |
+| Auth | Spring Security/Nimbus JWT, BCrypt, роли USER/ADMIN, статус и token_version в БД |
 
 Числа версий здесь — снимок текущего состояния, а не указание запрещать целевые обновления, если пользователь явно запросит миграцию.
 
@@ -102,23 +162,24 @@ culinary-craft/
 
 **Frontend**
 - `App.jsx` объявляет маршруты.
-- `Layout.jsx` содержит общую навигацию и переключение демонстрационных пользователей.
-- `context/AppContext.jsx` хранит текущего пользователя, уведомления, открытое меню выбора роли и сигнал обновления данных.
-- `api/client.js` — **единая точка HTTP-запросов**. Axios настроен на `baseURL: '/api'`; при выборе демо-пользователя отправляет `X-Demo-User`.
+- `Layout.jsx` содержит общую навигацию, аватар и доступ к форме входа/выхода.
+- `context/AppContext.jsx` хранит текущего пользователя, состояние сессии, уведомления и сигнал обновления данных.
+- `api/client.js` — **единая точка HTTP-запросов**. Axios использует `/api` и CSRF для мутаций; X-Demo-User не отправляется и не доверяется.
 - В режиме разработки Vite проксирует `/api` на `http://127.0.0.1:8080`.
 - Не дублируй базовые URL, HTTP-логику и обработку ошибок в страницах без необходимости.
+- Черновики редактора локальны для профиля браузера и привязаны к ID аккаунта и режиму создания или ID рецепта. Сохраняй только разрешённые поля и признаки работы с фото. Токены и файлы остаются вне localStorage.
 
 Маршруты приложения: `/`, `/recipes/:id`, `/recipes/:id/edit`, `/create`, `/profile`, `/favorites`, `/moderation`, а также страница 404.
 
 **Backend**
 - `CulinaryCraftApplication` — главный `@SpringBootApplication`, пакет `com.culinarycraft`.
 - `api/RecipeController` — HTTP-контракт рецептов, валидация `@Valid` у входящих данных.
-- `api/DemoController` — `/api/health` и список демо-пользователей.
+- `api/DemoController` — `/api/health` и исторический список только LEGACY (не список реальных аккаунтов).
 - `service/RecipeService` — основная бизнес-логика; операции записи транзакционны и блокируют строку рецепта через `PESSIMISTIC_WRITE`.
 - `persistence/RecipeStore` — преобразование JPA entities в существующие records; репозитории обеспечивают хранение рецептов, отзывов и избранного.
-- `service/DemoUserService` — роли и проверки доступа; три прежних демо-пользователя читаются из PostgreSQL.
+- `service/DemoUserService` — роли и проверки доступа для RecipeService; текущий ID поступает из проверенного JWT, не из заголовка.
 - Flyway создаёт схему и однократно добавляет начальные данные. Hibernate использует `ddl-auto=validate`; не заменяй миграции автоматическим `update`/`create`.
-- Поиск, сортировка и пагинация пока выполняются сервисом в Java после чтения рецептов; это ограничение учебного объёма, не SQL-пагинация.
+- Каталог использует CatalogQuery (SQL, pg_trgm, LIMIT/OFFSET, агрегаты) и JPA batch для DTO страницы. Административные списки также пагинируются в БД.
 - `model/` — Java records, request/view-модели.
 - `api/ApiErrorHandler` — формат ошибок API.
 
@@ -126,12 +187,12 @@ culinary-craft/
 
 ## 5. Текущее поведение и бизнес-правила
 
-Роли и демо-пользователи:
+Роли: USER/ADMIN. Исторические пользователи LEGACY без возможности входа:
 - ID `1` — **Анна Петрова**, `USER`.
 - ID `2` — **Максим Еремин**, `USER`.
 - ID `3` — **Марина Волкова**, `ADMIN`.
-- Гость: без `X-Demo-User`, в браузере может быть `localStorage['cc-demo-user'] = 'guest'`.
-- Это имитация ролей, **не доверенный механизм аутентификации**. Не вводи пароли/секреты, не изображай этот заголовок безопасным.
+- Гость — без действующей cookie-сессии. X-Demo-User не даёт прав.
+- Новые аккаунты создаются регистрацией; первый ADMIN — только серверной bootstrap-инициализацией из окружения.
 
 Жизненный цикл рецепта:
 - Создание пользователем → `PENDING`.
@@ -178,7 +239,7 @@ culinary-craft/
 ## 7. Среда и локальные команды (Windows PowerShell)
 
 Предпочтительная среда пользователя: **Windows + VS Code + PowerShell**.
-Предпосылки: JDK 17 или 21, Node.js 22, npm, Git, Docker Desktop с Linux engine и Compose v2; Python 3 при работе с метриками. Для Gradle используется wrapper из `backend/`, отдельная установка Gradle не нужна. Если PowerShell блокирует `npm.ps1`, используй `npm.cmd` и `npx.cmd`.
+Предпосылки: JDK 17 или 21, Node.js 22.12+ в ветке 22, npm, Git, Docker Desktop с Linux engine и Compose v2; Python 3 при работе с метриками. Для Gradle используется wrapper из `backend/`, отдельная установка Gradle не нужна. Если PowerShell блокирует `npm.ps1`, используй `npm.cmd` и `npx.cmd`.
 
 Перед backend из корня запусти PostgreSQL:
 ```powershell
@@ -242,7 +303,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 - Конфигурация автоматически запускает backend (`bootRun`) и frontend (`npm run dev`) по необходимости.
-- Перед E2E нужен PostgreSQL: локально `docker compose up -d --wait postgres`, в CI отдельный service в job `e2e`. E2E записывает данные в выбранную БД.
+- Перед E2E нужны отдельные PostgreSQL и Mailpit. Укажи свежую тестовую базу в `E2E_DB_URL`. В CI оба сервиса поднимает job `e2e`.
+- По умолчанию используется Chromium. Локально после установки движков можно выбрать Firefox или WebKit через `E2E_BROWSER=firefox` или `E2E_BROWSER=webkit`. Для каждого запуска нужна свежая база.
 - Проверяет реальный браузер и реальные HTTP-запросы.
 - Если уже работающие серверы на 8080/5173 принадлежат другому проекту, закрой их перед тестированием.
 - HTML-отчёт: `frontend/playwright-report/index.html`; JUnit XML: `frontend/reports/frontend/tests/playwright-junit.xml`.

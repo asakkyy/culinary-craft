@@ -1,0 +1,82 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname, basename } from 'node:path';
+import { newCommits, checkCommits } from './check-pr-commits.mjs';
+
+test('PR selection and linting for main/dev, including new merges', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'culinary-commit-check-'));
+  t.after(() => {
+    assert.equal(dirname(directory), tmpdir());
+    assert.ok(basename(directory).startsWith('culinary-commit-check-'));
+    rmSync(directory, { recursive: true, force: true });
+  });
+  const env = { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.invalid',
+    GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.invalid' };
+  const git = (args, input) => execFileSync('git', args, {
+    cwd: directory, env, input, encoding: 'utf8',
+  }).trim();
+  git(['init', '--quiet']);
+  const tree = git(['mktree'], '');
+  const commit = (message, parents = []) => git([
+    'commit-tree', tree, ...parents.flatMap(p => ['-p', p]),
+  ], message + '\n');
+  const base = commit('old accepted base message');
+  const main = commit('old accepted main message', [base]);
+  const dev = commit('another accepted base message', [base]);
+  const merge = commit('chore: sync main into dev', [dev, main]);
+  assert.deepEqual(newCommits(directory, dev, merge, main), [merge]);
+  assert.equal(checkCommits(directory, [merge]), true);
+
+  const fix = commit('fix: validate new messages', [main]);
+  assert.deepEqual(newCommits(directory, main, fix, main), [fix]);
+  assert.equal(checkCommits(directory, [fix]), true);
+
+  const invalid = commit('some random message', [merge]);
+  assert.deepEqual(newCommits(directory, dev, invalid, main), [merge, invalid]);
+  assert.equal(checkCommits(directory, [invalid]), false);
+  const cli = (head) => spawnSync(process.execPath, [
+    fileURLToPath(new URL('./check-pr-commits.mjs', import.meta.url)), base, head, main, dev,
+  ], { cwd: directory, encoding: 'utf8' });
+  assert.equal(cli(fix).status, 0);
+  assert.equal(cli(invalid).status, 1);
+
+  // Commitlint normally ignores this message; our strict config must reject it.
+  const invalidMerge = commit("Merge branch 'main' into dev", [dev, main]);
+  assert.deepEqual(newCommits(directory, dev, invalidMerge, main), [invalidMerge]);
+  assert.equal(checkCommits(directory, [invalidMerge]), false);
+  assert.deepEqual(newCommits(directory, base, merge, main, dev), [merge]);
+  for (const [index, ref] of [dev, merge, main, dev].entries()) {
+    const refs = [dev, merge, main, dev];
+    refs[index] = `${ref}-missing`;
+    assert.throws(() => newCommits(directory, ...refs));
+  }
+
+  const githubHeader = 'Merge pull request #42 from contributor-org/fix/commit-check';
+  const validSubject = 'fix(ci): accept validated merge messages';
+  for (const [name, message, parents, expected] of [
+    ['accepts a GitHub PR merge with a conventional subject and body', `${githubHeader}\n\n${validSubject}\n\nExplain the change.`, [dev, fix], true],
+    ['rejects an invalid PR subject even if the body contains a valid subject', `${githubHeader}\n\nA random title\n\n${validSubject}`, [dev, fix], false],
+    ['rejects a GitHub merge header without a PR subject', githubHeader, [dev, fix], false],
+    ['rejects a single-parent commit impersonating a GitHub PR merge', `${githubHeader}\n\n${validSubject}`, [dev], false],
+    ['rejects a merge header with an invalid Git branch', `Merge pull request #42 from contributor-org/fix/invalid..branch\n\n${validSubject}`, [dev, fix], false],
+    ['rejects a merge header without the GitHub blank line separator', `${githubHeader}\n${validSubject}`, [dev, fix], false],
+  ]) {
+    await t.test(name, () => assert.equal(checkCommits(directory, [commit(message, parents)]), expected));
+  }
+
+  await t.test('validates a future GitHub merge of the fix in the dev to main PR', () => {
+    const firstPr = commit(`${githubHeader}\n\n${validSubject}`, [main, fix]);
+    const followUp = commit('fix(ci): verify the next integration', [firstPr]);
+    assert.deepEqual(newCommits(directory, firstPr, followUp, main), [followUp]);
+    assert.equal(checkCommits(directory, [followUp]), true);
+
+    const futureMerge = commit('Merge pull request #43 from contributor-org/fix/follow-up\n\nfix(ci): verify integration', [firstPr, followUp]);
+    const integration = newCommits(directory, main, futureMerge, main);
+    assert.deepEqual(new Set(integration), new Set([fix, firstPr, followUp, futureMerge]));
+    assert.equal(checkCommits(directory, integration), true);
+  });
+});

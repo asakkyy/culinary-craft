@@ -1,4 +1,13 @@
+# Backend runs on the host: MEDIA_ROOT points to a persistent host directory.
+# When containerizing backend, mount the same directory into that service;
+# PostgreSQL volumes do not contain uploaded files.
 services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    command: ["--smtp-disable-rdns", "--disable-version-check"]
+    ports:
+      - "127.0.0.1:${MAIL_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_WEB_PORT:-8025}:8025"
   postgres:
     image: postgres:17-alpine
     environment:

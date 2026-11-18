@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CatalogPage from './CatalogPage';
 import { api } from '../api/client';
@@ -15,9 +15,21 @@ beforeEach(() => {
 });
 
 describe('Каталог: пользовательские сценарии', () => {
+  it('ограничивает число кнопок для большого каталога', async () => {
+    api.catalog.mockResolvedValue({ content: [recipe], total: 600000, totalPages: 100000 });
+    renderPage(<CatalogPage />);
+    expect(await screen.findByRole('navigation', { name: 'Страницы каталога' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button').length).toBeLessThan(25);
+    expect(screen.getByRole('button', { name: '100000', exact: true })).toBeInTheDocument();
+  });
+  it('показывает доступное сообщение ошибки сервера', async () => {
+    api.catalog.mockRejectedValueOnce(new Error('Сервер временно недоступен'));
+    renderPage(<CatalogPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сервер временно недоступен');
+  });
   it('показывает список рецептов и число результатов', async () => {
     renderPage(<CatalogPage />);
-    expect(await screen.findByText('Тестовый домашний суп')).toBeInTheDocument();
+    expect(await within(screen.getByRole('region', { name: 'Каталог рецептов' })).findByText('Тестовый домашний суп')).toBeInTheDocument();
     expect(screen.getByText('Найдено 1 рецептов')).toBeInTheDocument();
   });
 

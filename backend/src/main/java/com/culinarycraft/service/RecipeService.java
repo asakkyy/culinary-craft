@@ -15,39 +15,20 @@ import org.springframework.web.server.ResponseStatusException;
 public class RecipeService {
     private final DemoUserService users;
     private final RecipeStore store;
+    private final com.culinarycraft.persistence.CatalogQuery catalogQuery;
+    private final com.culinarycraft.admin.AuditService audit;
 
-    public RecipeService(DemoUserService users, RecipeStore store) {
+    public RecipeService(DemoUserService users, RecipeStore store, com.culinarycraft.admin.AuditService audit, com.culinarycraft.persistence.CatalogQuery catalogQuery) {
         this.users = users;
         this.store = store;
+        this.audit = audit;
+        this.catalogQuery = catalogQuery;
     }
 
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Map<String, Object> catalog(String search, String category, String sort,
                                         int page, int size, Long userId) {
-        int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(30, size));
-        String text = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
-        List<Recipe> matching = store.all().stream()
-            .filter(r -> "APPROVED".equals(r.status()))
-            .filter(r -> category == null || category.equals("Все рецепты") || category.isBlank()
-                || category.equalsIgnoreCase(r.category()))
-            .filter(r -> text.isEmpty() || (r.title() + " " + r.description() + " "
-                + String.join(" ", r.tags())).toLowerCase(Locale.ROOT).contains(text))
-            .sorted(comparator(sort)).toList();
-        int from = (int) Math.min((long) safePage * safeSize, matching.size());
-        int to = Math.min(from + safeSize, matching.size());
-        return Map.of("content", matching.subList(from, to).stream().map(r -> view(r, userId)).toList(),
-            "total", matching.size(), "page", safePage, "size", safeSize,
-            "totalPages", (matching.size() + safeSize - 1) / safeSize);
-    }
-
-    private Comparator<Recipe> comparator(String sort) {
-        return switch (sort == null ? "" : sort) {
-            case "newest" -> Comparator.comparing(Recipe::createdAt).reversed();
-            case "quick" -> Comparator.comparingInt(Recipe::prepMinutes);
-            case "rating" -> Comparator.<Recipe>comparingDouble(this::average).reversed();
-            default -> Comparator.<Recipe>comparingDouble(this::average).reversed()
-                .thenComparing(Recipe::createdAt, Comparator.reverseOrder());
-        };
+        return catalogQuery.page(search, category, sort, page, size, userId);
     }
 
     public RecipeView get(long id, Long userId) {
@@ -159,6 +140,23 @@ public class RecipeService {
         Recipe changed = new Recipe(r.id(), r.title(), r.description(), r.category(), r.emoji(),
             r.imageUrl(), r.prepMinutes(), r.servings(), r.difficulty(), r.ingredients(),
             r.steps(), r.tags(), r.ownerId(), r.ownerName(), status, r.createdAt());
+        audit.record(userId, "APPROVED".equals(status) ? com.culinarycraft.admin.AuditEvent.Action.RECIPE_APPROVED
+            : com.culinarycraft.admin.AuditEvent.Action.RECIPE_REJECTED, "RECIPE", id, "Status: " + status);
+        return view(store.save(changed), userId);
+    }
+
+    @Transactional
+    public RecipeView unpublish(long id, Long userId, String reason) {
+        users.requireAdmin(userId);
+        if (reason == null || reason.strip().length() < 3 || reason.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину снятия с публикации");
+        }
+        Recipe r = locked(id);
+        if (!"APPROVED".equals(r.status())) throw new ResponseStatusException(HttpStatus.CONFLICT, "Рецепт уже не опубликован");
+        Recipe changed = new Recipe(r.id(), r.title(), r.description(), r.category(), r.emoji(),
+            r.imageUrl(), r.prepMinutes(), r.servings(), r.difficulty(), r.ingredients(), r.steps(), r.tags(),
+            r.ownerId(), r.ownerName(), "PENDING", r.createdAt());
+        audit.record(userId, com.culinarycraft.admin.AuditEvent.Action.RECIPE_UNPUBLISHED, "RECIPE", id, reason.strip());
         return view(store.save(changed), userId);
     }
 
@@ -179,6 +177,10 @@ public class RecipeService {
     }
 
     private Recipe fromRequest(long id, RecipeRequest request, DemoUser user, String status, Instant createdAt) {
+        if (request.imageUrl() != null && request.imageUrl().strip().startsWith("/api/media/")
+            && (id == 0 || !required(id).imageUrl().equals(request.imageUrl().strip()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Управляемые фотографии изменяются только через загрузку файла");
+        }
         return new Recipe(id, request.title().strip(), request.description().strip(), request.category(),
             request.emoji() == null || request.emoji().isBlank() ? "🍽️" : request.emoji(),
             request.imageUrl() == null ? "" : request.imageUrl().strip(), request.prepMinutes(),

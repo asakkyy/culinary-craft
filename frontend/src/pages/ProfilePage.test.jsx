@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ProfilePage from './ProfilePage';
 import { api } from '../api/client';
 import { useApp } from '../context/AppContext';
@@ -26,8 +27,17 @@ it('открывает сохранённые рецепты в избранно
   expect(await screen.findByText('Тестовый домашний суп')).toBeInTheDocument();
 });
 
-it('просит гостя выбрать демо-пользователя', () => {
+it('предлагает гостю войти в свою книгу рецептов', () => {
   useApp.mockReturnValue({ user: null, setPickerOpen: vi.fn() });
   renderPage(<ProfilePage />);
-  expect(screen.getByRole('heading', { name: 'Добро пожаловать!' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Ваша книга рецептов' })).toBeInTheDocument();
+});
+it('позволяет восстановить список после сетевой ошибки без ложных нулевых счётчиков', async () => {
+  api.mine.mockRejectedValueOnce(new Error('Нет сети'));
+  renderPage(<ProfilePage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Нет сети');
+  expect(document.querySelector('.profile-stats')).toHaveTextContent('—');
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить загрузку' }));
+  expect(await screen.findByText('Тестовый домашний суп')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

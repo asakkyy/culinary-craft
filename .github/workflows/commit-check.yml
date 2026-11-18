@@ -10,19 +10,35 @@ permissions:
 jobs:
   commitlint:
     name: Conventional Commits
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Fetch accepted histories and event commits
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git check-ref-format "refs/heads/$BASE_REF"
+          git fetch --no-tags origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            "+refs/heads/$BASE_REF:refs/remotes/origin/pr-base" \
+            "$BASE_SHA" "$HEAD_SHA"
       - run: npm ci
-      - name: Verify every commit in PR
+      - name: Test commit selection and strict linting
+        run: node --test scripts/check-pr-commits.test.mjs
+      - name: Verify every new PR commit including merges
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: npx commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+        run: node scripts/check-pr-commits.mjs "$BASE_SHA" "$HEAD_SHA" origin/main origin/pr-base

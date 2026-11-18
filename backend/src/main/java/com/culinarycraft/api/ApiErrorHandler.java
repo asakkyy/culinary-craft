@@ -11,6 +11,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiErrorHandler {
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Map<String, String>> invalidInput() {
+        return ResponseEntity.badRequest().body(Map.of("message", "Некорректный формат запроса"));
+    }
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> uploadLimit() {
+        return ResponseEntity.status(413).body(Map.of("message", "Максимальный размер файла — 5 МБ"));
+    }
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handle(ResponseStatusException e) {
         String message = e.getReason() == null ? "Ошибка запроса" : e.getReason();
