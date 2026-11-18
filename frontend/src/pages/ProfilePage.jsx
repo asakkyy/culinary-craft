@@ -62,6 +62,9 @@ export default function ProfilePage({ view = 'mine' }) {
             Регистрация: {user.registeredAt ? new Date(user.registeredAt).toLocaleDateString('ru-RU') : '—'} ·{' '}
             {user.emailVerified ? 'Email подтверждён' : 'Email не подтверждён'}
           </p>
+          {user.emailVerified === false && (
+            <Link className="btn btn-light" to="/resend-verification">Отправить письмо для подтверждения</Link>
+          )}
         </div>
         <button className="btn btn-light profile-switch" onClick={() => navigate('/settings')}>
           <Settings2 size={17} aria-hidden="true" /> Настройки аккаунта

@@ -4,11 +4,25 @@ import { api, errorText } from '../api/client';
 import { useApp } from '../context/AppContext';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-export default function AuthForm({ register = false }) {
+function loginDestination(from) {
+  if (typeof from !== 'string' || !from.startsWith('/') || from.startsWith('//')) return '/';
+  const origin = window.location.origin;
+  try {
+    const { origin: destinationOrigin, pathname, search, hash } = new URL(from, origin);
+    const route = decodeURIComponent(pathname);
+    if (destinationOrigin === origin && !route.startsWith('//') && !/^\/(login|register)\/?$/i.test(route)) {
+      return { pathname, search, hash };
+    }
+  } catch {
+    return '/';
+  }
+  return '/';
+}
+
+export default function AuthForm({ register: signup = false }) {
   const { user, login, logout } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
-  const [signup, setSignup] = useState(register);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +39,7 @@ export default function AuthForm({ register = false }) {
         await login({ email, password });
         setPassword('');
         if (signup) navigate('/resend-verification', { replace: true });
-        else if (location.state?.from) navigate(location.state.from, { replace: true });
+        else navigate(loginDestination(location.state?.from), { replace: true });
       }
     } catch (err) {
       setError(errorText(err));
@@ -45,11 +59,6 @@ export default function AuthForm({ register = false }) {
             : 'Вернитесь к сохранённым рецептам и своей кухне'}
       </p>
       {location.state?.notice && <p role="status">{location.state.notice}</p>}
-      {user && user.emailVerified === false && (
-        <p role="status">
-          Для публикации подтвердите email. <Link to="/resend-verification">Отправить письмо</Link>
-        </p>
-      )}
       {error && <FormError>{error}</FormError>}
       <form onSubmit={submit}>
         {!user && (
@@ -102,13 +111,13 @@ export default function AuthForm({ register = false }) {
           {busy ? 'Подождите…' : user ? 'Выйти' : signup ? 'Создать аккаунт' : 'Войти'}
         </button>
         {!user && (
-          <button type="button" className="btn btn-outline" onClick={() => setSignup(!signup)}>
+          <Link to={signup ? '/login' : '/register'} state={location.state} className="btn btn-outline">
             {signup ? 'Уже есть аккаунт' : 'Регистрация'}
-          </button>
+          </Link>
         )}
       </form>
       <p>
-        <Link to="/forgot-password">Забыли пароль?</Link> · <Link to="/resend-verification">Подтвердить email</Link>
+        <Link to="/forgot-password">Забыли пароль?</Link>
       </p>
     </section>
   );

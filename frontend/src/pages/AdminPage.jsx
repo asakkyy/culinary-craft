@@ -14,6 +14,12 @@ import DataTable, { StatusBadge, TablePagination } from '../components/DataTable
 
 const userStatuses = { ACTIVE: 'Активен', BLOCKED: 'Заблокирован', LEGACY: 'Архивный аккаунт' };
 const roles = { USER: 'Пользователь', ADMIN: 'Администратор' };
+const reportDecisions = {
+  IN_REVIEW: 'Принять в работу',
+  UNPUBLISH: 'Снять рецепт с публикации',
+  REJECTED: 'Отклонить жалобу',
+  RESOLVED: 'Закрыть без изменения рецепта',
+};
 const events = {
   USER_BLOCKED: 'Пользователь заблокирован',
   USER_UNBLOCKED: 'Доступ восстановлен',
@@ -42,7 +48,7 @@ const detail = (item) =>
       : item.details;
 
 export default function AdminPage() {
-  const { user, notify } = useApp();
+  const { user, notify, changed } = useApp();
   const [params, setParams] = useSearchParams();
   const pendingFilters = useRef(null);
   useLayoutEffect(() => {
@@ -79,6 +85,7 @@ export default function AdminPage() {
   const [selected, setSelected] = useState(null);
   const [comment, setComment] = useState('');
   const [decision, setDecision] = useState('');
+  const unpublishRecipe = decision === 'UNPUBLISH';
   const [confirm, setConfirm] = useState(false);
   const [actionError, setActionError] = useState('');
   useEffect(() => {
@@ -151,10 +158,17 @@ export default function AdminPage() {
     setBusy(true);
     setActionError('');
     try {
-      if (tab === 'reports') await api.reportDecision(selected.id, { status: decision, comment: comment.trim() });
+      if (tab === 'reports') {
+        await api.reportDecision(selected.id, {
+          status: unpublishRecipe ? 'RESOLVED' : decision,
+          comment: comment.trim(),
+          ...(unpublishRecipe && { unpublishRecipe: true }),
+        });
+        if (unpublishRecipe) changed();
+      }
       else if (selected.status === 'BLOCKED') await api.unblockUser(selected.id);
       else await api.blockUser(selected.id, { reason: comment.trim() });
-      notify('Решение сохранено');
+      notify(tab === 'reports' && unpublishRecipe ? 'Рецепт снят с публикации, жалоба закрыта' : 'Решение сохранено');
       setSelected(null);
       setVersion((v) => v + 1);
     } catch (err) {
@@ -470,9 +484,6 @@ export default function AdminPage() {
                       </>
                     )}
                   </dl>
-                  <p className="info-note">
-                    Решение по жалобе не меняет статус рецепта и не блокирует автора. Эти действия доступны отдельно.
-                  </p>
                 </>
               ) : (
                 <>
@@ -497,7 +508,7 @@ export default function AdminPage() {
                     <div className="field">
                       <label htmlFor="decision">Решение</label>
                       <select id="decision" disabled={confirm || busy} value={decision} onChange={(e) => setDecision(e.target.value)}>
-                        {Object.entries({ IN_REVIEW: 'Принять в работу', RESOLVED: 'Закрыть жалобу', REJECTED: 'Отклонить жалобу' })
+                        {Object.entries(reportDecisions)
                           .filter(([key]) => key !== selected.status)
                           .map(([key, text]) => (
                             <option key={key} value={key}>
@@ -516,7 +527,7 @@ export default function AdminPage() {
                         id="action-comment"
                         required
                         minLength={3}
-                        maxLength={tab === 'reports' ? 1000 : 500}
+                        maxLength={tab === 'reports' && !unpublishRecipe ? 1000 : 500}
                         rows={4}
                         value={comment}
                         disabled={confirm || busy}
@@ -530,7 +541,9 @@ export default function AdminPage() {
                   {confirm && (
                     <p className="warning-note">
                       {tab === 'reports'
-                        ? 'После завершения жалобу нельзя вернуть в работу. Подтвердите решение.'
+                        ? unpublishRecipe
+                          ? 'Рецепт исчезнет из публичного каталога и вернётся на модерацию. Жалоба будет закрыта.'
+                          : 'После завершения жалобу нельзя вернуть в работу. Подтвердите решение.'
                         : 'Подтвердите изменение доступа к аккаунту.'}
                     </p>
                   )}

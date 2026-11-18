@@ -91,43 +91,61 @@ test('Жалоба, решение, аудит и блокировка дейс�
   await page.getByRole('button', { name: 'Создать аккаунт' }).click();
   await expect(page.getByRole('button', { name: /Меню аккаунта/ })).toBeVisible();
   await verifyMailbox(page, email);
-  await page.goto('/recipes/1');
-  await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Закрыть окно' })).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Отправить жалобу' })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Пожаловаться', exact: true })).toBeFocused();
-  await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
-  await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
-  await page.getByRole('button', { name: 'Отправить жалобу' }).click();
-  await expect(page.locator('.toast')).toHaveText(/Жалоба отправлена/);
-  await page.goto('/reports');
-  await expect(page.getByText(/Спам · Открыта/)).toBeVisible();
   const adminContext = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
   try {
     const admin = await adminContext.newPage();
     admin.on('dialog', (dialog) => dialog.accept());
-    await admin.goto('/login');
+    await admin.goto('/admin?section=reports');
+    await expect(admin).toHaveURL(/\/login$/);
     await admin.getByLabel('Email', { exact: true }).fill('admin@e2e.invalid');
     await admin.getByLabel('Пароль', { exact: true }).fill(process.env.CC_E2E_ADMIN_PASSWORD);
     await admin.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(admin.getByRole('button', { name: /Меню аккаунта/ })).toBeVisible();
-    await admin.goto('/admin');
+    await expect(admin).toHaveURL(/\/admin\?section=reports$/);
+    async function post(path, data) {
+      const { token } = await (await admin.request.get('/api/auth/csrf')).json();
+      return admin.request.post(path, { data, headers: { 'X-XSRF-TOKEN': token } });
+    }
+    const created = await post('/api/recipes', {
+      title: `Рецепт для жалобы ${suffix}`, description: 'Описание рецепта для проверки модерации',
+      category: 'Супы', prepMinutes: 30, servings: 2, difficulty: 'Легко',
+      ingredients: ['Вода'], steps: ['Нагреть воду'], tags: [],
+    });
+    expect(created.status(), await created.text()).toBe(200);
+    const { id } = await created.json();
+    const recipePath = `/api/recipes/${id}`;
+    const approved = await post(`${recipePath}/moderate`, { status: 'APPROVED' });
+    expect(approved.status(), await approved.text()).toBe(200);
+    await page.goto(`/recipes/${id}`);
+    await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Закрыть окно' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('button', { name: 'Отправить жалобу' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Пожаловаться', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
+    await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
+    await page.getByRole('button', { name: 'Отправить жалобу' }).click();
+    await expect(page.locator('.toast')).toHaveText(/Жалоба отправлена/);
+    await page.goto('/reports');
+    await expect(page.getByText(/Спам · Открыта/)).toBeVisible();
     await admin.getByRole('searchbox', { name: 'Административный поиск' }).fill(email);
     const report = admin.locator('tbody tr').filter({ hasText: `Заявитель ${suffix}` });
     await report.getByRole('button', { name: 'Рассмотреть' }).click();
-    await admin.getByLabel('Решение', { exact: true }).selectOption('RESOLVED');
+    await admin.getByLabel('Решение', { exact: true }).selectOption('UNPUBLISH');
     await admin.getByLabel(/Комментарий к жалобе/).fill('Проверено администратором');
     await admin.getByRole('button', { name: 'Сохранить решение' }).click();
     await admin.getByRole('button', { name: 'Подтвердить решение' }).click();
     await expect(report).toContainText('Закрыта');
+    expect((await page.request.get(recipePath)).status()).toBe(404);
+    expect((await (await admin.request.get(recipePath)).json()).status).toBe('PENDING');
     await page.reload();
     await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
     await admin.getByRole('link', { name: 'Аудит', exact: true }).click();
     await expect(admin.locator('tbody').getByText('Жалоба закрыта', { exact: true })).toBeVisible();
+    await expect(admin.locator('tbody').getByText('Рецепт снят с публикации', { exact: true })).toBeVisible();
     await admin.getByRole('link', { name: 'Хранилище', exact: true }).click();
     await admin.getByRole('button', { name: 'Проверить без удаления' }).click();
     await expect(admin.getByRole('status').filter({ hasText: 'Режим:' })).toContainText('Режим: без удаления');

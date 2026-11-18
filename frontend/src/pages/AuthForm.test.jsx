@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import AuthForm from './AuthForm';
 import { api } from '../api/client';
@@ -8,7 +9,36 @@ import { renderPage } from '../test/testHelpers';
 vi.mock('../api/client', () => ({ api: { register: vi.fn() }, errorText: e => e.message }));
 vi.mock('../context/AppContext', () => ({ useApp: vi.fn() }));
 const login = vi.fn(); const logout = vi.fn();
-beforeEach(() => { useApp.mockReturnValue({ user: null, login, logout }); });
+beforeEach(() => {
+  login.mockReset();
+  useApp.mockReturnValue({ user: null, login, logout });
+});
+it.each([
+  [undefined, 'USER', false, 'Каталог'],
+  ['//example.invalid/path', 'USER', true, 'Каталог'],
+  ['/\\example.invalid/path', 'USER', true, 'Каталог'],
+  ['/l%6fgin', 'USER', true, 'Каталог'],
+  ['/admin?section=users', 'ADMIN', true, 'Администрирование'],
+  ['/profile', 'USER', true, 'Профиль'],
+])('после входа выбирает внутренний маршрут для %s', async (from, role, emailVerified, destination) => {
+  login.mockResolvedValueOnce({ role, emailVerified });
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/login', search: '?from=https://example.invalid', state: { from } }]}>
+      <Routes>
+        <Route path="/login" element={<AuthForm />} />
+        <Route path="/" element={<h1>Каталог</h1>} />
+        <Route path="/admin" element={<h1>Администрирование</h1>} />
+        <Route path="/profile" element={<h1>Профиль</h1>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(screen.queryByRole('link', { name: 'Подтвердить email' })).not.toBeInTheDocument();
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Email'), 'author@example.test');
+  await user.type(screen.getByLabelText('Пароль'), 'fixture password');
+  await user.click(screen.getByRole('button', { name: 'Войти', exact: true }));
+  expect(await screen.findByRole('heading', { name: destination })).toBeVisible();
+});
 it('регистрирует аккаунт и выполняет вход', async () => {
   renderPage(<AuthForm register/>); const user = userEvent.setup();
   await user.type(screen.getByLabelText('Имя'), 'Новый автор');

@@ -6,7 +6,7 @@ export default function RequireAccount({ children, admin = false, verified = fal
   const { user, authLoading } = useApp();
   const location = useLocation();
   if (authLoading) return <p role="status">Загрузка сессии…</p>;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} />;
   if (admin && user.role !== 'ADMIN') return <div className="error-box">Доступ только для администратора</div>;
   if (verified && user.emailVerified === false)
     return (
