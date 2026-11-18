@@ -127,7 +127,13 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await expect(page.getByRole('button', { name: 'Пожаловаться', exact: true })).toBeFocused();
     await page.getByRole('button', { name: 'Пожаловаться', exact: true }).click();
     await page.getByLabel('Описание жалобы').fill(`Проверка жалобы в браузере ${suffix}`);
+    const reportResponse = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `${recipePath}/reports`,
+    );
     await page.getByRole('button', { name: 'Отправить жалобу' }).click();
+    const submittedReport = await reportResponse;
+    expect(submittedReport.status()).toBe(201);
+    const { id: reportId } = await submittedReport.json();
     await expect(page.locator('.toast')).toHaveText(/Жалоба отправлена/);
     await page.goto('/reports');
     await expect(page.getByText(/Спам · Открыта/)).toBeVisible();
@@ -144,8 +150,14 @@ test('Жалоба, решение, аудит и блокировка дейс�
     await page.reload();
     await expect(page.getByText(/Спам · Закрыта/)).toBeVisible();
     await admin.getByRole('link', { name: 'Аудит', exact: true }).click();
-    await expect(admin.locator('tbody').getByText('Жалоба закрыта', { exact: true })).toBeVisible();
-    await expect(admin.locator('tbody').getByText('Рецепт снят с публикации', { exact: true })).toBeVisible();
+    const auditRows = admin.locator('tbody').getByRole('row');
+    for (const [target, action] of [
+      [`Жалоба #${reportId}`, 'Жалоба закрыта'],
+      [`Рецепт #${id}`, 'Рецепт снят с публикации'],
+    ]) {
+      const row = auditRows.filter({ has: admin.getByRole('cell', { name: target, exact: true }) });
+      await expect(row.getByRole('cell', { name: action, exact: true })).toBeVisible();
+    }
     await admin.getByRole('link', { name: 'Хранилище', exact: true }).click();
     await admin.getByRole('button', { name: 'Проверить без удаления' }).click();
     await expect(admin.getByRole('status').filter({ hasText: 'Режим:' })).toContainText('Режим: без удаления');
