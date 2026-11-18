@@ -227,11 +227,7 @@ export default function Layout({ children }) {
             <Link to="/favorites">Избранное</Link>
             <Link to="/profile">Моя кухня</Link>
           </nav>
-          <div className="footer-note">
-            Домашняя кухня. Общий стол.
-            <br />
-            Учебный проект · React + Spring Boot
-          </div>
+          <div className="footer-note">Домашняя кухня. Общий стол.</div>
         </div>
       </footer>
       {toast && (

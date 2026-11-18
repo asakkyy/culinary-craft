@@ -29,6 +29,16 @@ it('не показывает управление обычному пользо
   expect(screen.queryByRole('menuitem', { name: 'Администрирование' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Управление' })).not.toBeInTheDocument();
 });
+it('сохраняет бренд и навигацию в подвале без технической подписи', () => {
+  renderPage(<Layout />);
+  const footer = within(screen.getByRole('contentinfo'));
+  expect(footer.getByRole('link', { name: 'Culinary Craft' })).toHaveAttribute('href', '/');
+  const links = within(footer.getByRole('navigation', { name: 'Ссылки в подвале' }));
+  expect(links.getByRole('link', { name: 'Каталог' })).toHaveAttribute('href', '/');
+  expect(links.getByRole('link', { name: 'Избранное' })).toHaveAttribute('href', '/favorites');
+  expect(links.getByRole('link', { name: 'Моя кухня' })).toHaveAttribute('href', '/profile');
+  expect(footer.queryByText(/учебный проект|spring boot/i)).not.toBeInTheDocument();
+});
 it('открывает администрирование для ADMIN', async () => {
   useApp.mockReturnValue({ user: admin, logout });
   renderPage(<Layout />);
